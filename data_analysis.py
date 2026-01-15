@@ -4,9 +4,7 @@ Module d'analyse exploratoire et statistique des données de vins
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple
-from scipy import stats
 from collections import Counter
-import re
 
 
 class WineDataAnalysis:

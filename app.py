@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import re
-from typing import List, Dict
+from typing import List, Dict, Optional
 from data_loader import WineDataLoader
 from semantic_search import SemanticWineSearch
 from genai_integration import WineGenAI
@@ -14,8 +14,10 @@ from data_analysis import WineDataAnalysis
 from visualizations import WineVisualizations
 from food_pairing_matcher import FoodPairingMatcher
 import os
-from typing import Dict, Optional
-from io import BytesIO
+from dotenv import load_dotenv
+
+# Charger les variables d'environnement depuis .env
+load_dotenv()
 
 # Configuration de la page
 st.set_page_config(
@@ -697,7 +699,7 @@ def display_analytics_tab():
                 f"{stats.get('iqr', 0):.2f}"
             ]
         })
-        st.dataframe(stats_df, use_container_width=True, hide_index=True)
+        st.dataframe(stats_df, width='stretch', hide_index=True)
     
     st.markdown("---")
     
@@ -710,23 +712,23 @@ def display_analytics_tab():
     with col1:
         st.markdown("#### Distribution par Type")
         fig_type_pie = visualizer.plot_type_distribution()
-        st.plotly_chart(fig_type_pie, use_container_width=True)
+        st.plotly_chart(fig_type_pie, width='stretch')
     
     # Graphique 2 : Prix Moyen par Type
     with col2:
         st.markdown("#### Prix Moyen par Type")
         fig_type_bar = visualizer.plot_price_by_type()
-        st.plotly_chart(fig_type_bar, use_container_width=True)
+        st.plotly_chart(fig_type_bar, width='stretch')
     
     # Graphique 3 : Distribution des Prix par Type (Box Plot)
     st.markdown("#### Distribution des Prix par Type (Box Plot)")
     fig_box = visualizer.plot_price_boxplot_by_type()
-    st.plotly_chart(fig_box, use_container_width=True)
+    st.plotly_chart(fig_box, width='stretch')
     
     # Graphique 4 : Top Régions
     st.markdown("#### Top Régions")
     fig_region = visualizer.plot_region_distribution(top_n=15)
-    st.plotly_chart(fig_region, use_container_width=True)
+    st.plotly_chart(fig_region, width='stretch')
 
 def extract_wine_characteristics(wines: List[Dict]) -> Dict[str, float]:
     """
@@ -884,113 +886,6 @@ def create_radar_chart(characteristics: Dict[str, float]) -> go.Figure:
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         font=dict(family='Playfair Display', color='#2C1810')
-    )
-    
-    return fig
-
-def _get_similarity_quality(score: float) -> str:
-    """
-    Retourne une description de la qualité de la similarité cosinus
-    
-    Note: Les scores de similarité cosinus avec SBERT sont généralement entre 0.3-0.7
-    pour des textes similaires mais pas identiques. C'est normal et attendu.
-    
-    Args:
-        score: Score de similarité cosinus (0-1)
-        
-    Returns:
-        Description textuelle de la qualité
-    """
-    if score >= 0.7:
-        return "Excellente correspondance"
-    elif score >= 0.5:
-        return "Bonne correspondance"
-    elif score >= 0.4:
-        return "Correspondance correcte"
-    elif score >= 0.3:
-        return "Correspondance modérée"
-    else:
-        return "Correspondance faible"
-
-def create_cosine_similarity_chart(chart_data):
-    """
-    Crée un graphique stylé des scores de similarité cosinus
-    
-    Args:
-        chart_data: Liste de dictionnaires avec 'nom', 'type', 'score_cosinus'
-        
-    Returns:
-        Figure Plotly
-    """
-    import plotly.graph_objects as go
-    
-    # Trier par score décroissant
-    chart_data_sorted = sorted(chart_data, key=lambda x: x['score_cosinus'], reverse=True)
-    
-    noms = [w['nom'][:40] + '...' if len(w['nom']) > 40 else w['nom'] for w in chart_data_sorted]
-    # Les scores sont bruts (0-1), on les convertit en pourcentage
-    # Note: Les scores entre 0.4-0.6 sont normaux et indiquent une bonne correspondance
-    scores = [w['score_cosinus'] * 100 for w in chart_data_sorted]
-    types = [w['type'] for w in chart_data_sorted]
-    
-    # Couleurs selon le type de vin
-    color_map = {
-        'Rouge': '#8B0000',
-        'Blanc': '#F5DEB3',
-        'Rosé': '#FFB6C1',
-        'Bulles': '#FFF8DC',
-        'Liquoreux': '#D4AF37',
-        'Orange': '#FFA500'
-    }
-    
-    colors = [color_map.get(t, '#CCCCCC') for t in types]
-    
-    fig = go.Figure()
-    
-    # Créer une trace unique avec couleurs personnalisées
-    fig.add_trace(go.Bar(
-        x=scores,
-        y=noms,
-        orientation='h',
-        marker=dict(
-            color=colors,
-            line=dict(color='rgba(0,0,0,0.2)', width=1),
-            opacity=0.8
-        ),
-        text=[f"{s:.1f}%" for s in scores],
-        textposition='outside',
-        customdata=[[t] for t in types],  # Pour afficher le type dans le hover
-        hovertemplate='<b>%{y}</b><br>' +
-                      'Type: %{customdata[0]}<br>' +
-                      'Score: %{x:.2f}%<br>' +
-                      '<extra></extra>',
-        name='Similarité cosinus'
-    ))
-    
-    fig.update_layout(
-        title={
-            'text': '📊 Scores de Similarité Cosinus (Top 15)',
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 20, 'family': 'Playfair Display', 'color': '#2C1810'}
-        },
-        xaxis_title='Score de Similarité (%)',
-        yaxis_title='Vins',
-        height=max(500, len(noms) * 40),
-        template='plotly_white',
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        xaxis=dict(
-            range=[0, 105],
-            tickformat='.0f',
-            gridcolor='rgba(0,0,0,0.1)'
-        ),
-        yaxis=dict(
-            autorange='reversed',
-            gridcolor='rgba(0,0,0,0.1)'
-        ),
-        margin=dict(l=200, r=50, t=80, b=50),
-        showlegend=False
     )
     
     return fig
@@ -1337,12 +1232,6 @@ def search_wines(
                             </div>
                             <div style="text-align: center;">
                                 <div class="score-badge">⭐ {int(semantic_score * 100)}%</div>
-                                <div style="font-size: 0.85rem; color: #722F37; margin-top: 0.3rem;">
-                                    Similarité Cosinus: {semantic_score*100:.1f}%
-                                </div>
-                                <div style="font-size: 0.7rem; color: #8B0000; margin-top: 0.2rem; font-style: italic;">
-                                    {_get_similarity_quality(semantic_score)}
-                                </div>
                             </div>
                         </div>
                         <p style="color: #555; font-style: italic; line-height: 1.6; margin: 1rem 0;">
@@ -1429,7 +1318,7 @@ def search_wines(
                     template='plotly_white'
                 )
                 fig_coverage.update_traces(texttemplate='%{y:.2%}', textposition='outside')
-                st.plotly_chart(fig_coverage, use_container_width=True)
+                st.plotly_chart(fig_coverage, width='stretch')
                 
                 # Graphique 2 : Prix des vins recommandés
                 col1, col2 = st.columns(2)
@@ -1457,7 +1346,7 @@ def search_wines(
                         template='plotly_white'
                     )
                     fig_price.update_traces(texttemplate='%{y:.0f}€', textposition='outside')
-                    st.plotly_chart(fig_price, use_container_width=True)
+                    st.plotly_chart(fig_price, width='stretch')
                 
                 with col2:
                     st.markdown("#### 🍷 Répartition par Type")
@@ -1475,7 +1364,7 @@ def search_wines(
                     )
                     fig_type.update_layout(height=350, template='plotly_white')
                     fig_type.update_traces(textposition='inside', textinfo='percent+label')
-                    st.plotly_chart(fig_type, use_container_width=True)
+                    st.plotly_chart(fig_type, width='stretch')
                 
                 # Graphique 3 : Relation Prix vs Score de Couverture
                 st.markdown("#### 📊 Relation Prix vs Score de Couverture")
@@ -1501,7 +1390,7 @@ def search_wines(
                     template='plotly_white'
                 )
                 fig_scatter.update_traces(marker=dict(line=dict(width=1, color='DarkSlateGrey')))
-                st.plotly_chart(fig_scatter, use_container_width=True)
+                st.plotly_chart(fig_scatter, width='stretch')
             
             # Carte de France avec les vins recommandés
             st.markdown("---")
@@ -1520,7 +1409,7 @@ def search_wines(
                 # Créer la carte
                 visualizer = WineVisualizations(wines_for_map)
                 fig_map = visualizer.create_france_wine_map(wines_for_map)
-                st.plotly_chart(fig_map, use_container_width=True)
+                st.plotly_chart(fig_map, width='stretch')
             
             # Graphique en radar (araignée) des caractéristiques moyennes
             st.markdown("---")
@@ -1533,17 +1422,8 @@ def search_wines(
                 
                 if characteristics:
                     fig_radar = create_radar_chart(characteristics)
-                    st.plotly_chart(fig_radar, use_container_width=True)
+                    st.plotly_chart(fig_radar, width='stretch')
             
-            # Graphique de similarité cosinus (gardé)
-            st.markdown("---")
-            st.markdown("### 📊 Scores de Similarité Cosinus")
-            st.markdown("Graphique montrant la similarité sémantique entre votre requête et les vins de la base de données")
-            st.info("💡 **Note importante** : Les scores de similarité cosinus avec SBERT sont généralement entre **0.3-0.7** pour des textes similaires mais pas identiques. Un score de **0.4-0.6** indique une **bonne correspondance sémantique**. C'est normal et attendu ! Les scores très élevés (>0.8) sont rares et indiquent des textes presque identiques.")
-            
-            if chart_data:
-                fig_cosine = create_cosine_similarity_chart(chart_data)
-                st.plotly_chart(fig_cosine, use_container_width=True)
         else:
             st.warning("Aucun vin ne correspond à vos critères. Essayez d'élargir vos filtres.")
 

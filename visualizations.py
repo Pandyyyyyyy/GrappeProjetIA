@@ -4,7 +4,7 @@ Module de visualisations graphiques pour les données de vins
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import List, Dict
 import numpy as np
 
 

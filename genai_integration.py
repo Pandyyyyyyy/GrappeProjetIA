@@ -3,6 +3,7 @@ Module d'intégration GenAI pour enrichir les descriptions et générer des just
 Supporte Google Gemini 2.5 Flash (gratuit) et OpenAI avec système de cache
 """
 import os
+import warnings
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
@@ -13,11 +14,15 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
+# Supprimer l'avertissement de dépréciation pour google.generativeai
+# Utiliser catch_warnings pour capturer l'avertissement lors de l'import
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", FutureWarning)
+    try:
+        import google.generativeai as genai
+        GEMINI_AVAILABLE = True
+    except ImportError:
+        GEMINI_AVAILABLE = False
 
 from genai_cache import GenAICache
 
@@ -53,23 +58,23 @@ class WineGenAI:
         if self.provider == "gemini":
             # Google Gemini 2.5 Flash (gratuit)
             if not GEMINI_AVAILABLE:
-                print("⚠️  google-generativeai non installé. Installez avec: pip install google-generativeai")
+                print("[WARNING] google-generativeai non installe. Installez avec: pip install google-generativeai")
                 return
             
             self.api_key = api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-            self.model = model or "gemini-2.0-flash-exp"  # Modèle gratuit et rapide
+            self.model = model or "gemini-2.5-flash"  # Modèle gratuit avec meilleur quota
             
             if self.api_key:
                 genai.configure(api_key=self.api_key)
                 self.genai_client = genai.GenerativeModel(self.model)
-                print(f"✅ Google Gemini configuré (modèle: {self.model})")
+                print(f"[OK] Google Gemini configure (modele: {self.model})")
             else:
-                print("⚠️  GOOGLE_API_KEY ou GEMINI_API_KEY non trouvée. Les fonctionnalités GenAI seront désactivées.")
+                print("[WARNING] GOOGLE_API_KEY ou GEMINI_API_KEY non trouvee. Les fonctionnalites GenAI seront desactivees.")
         
         elif self.provider == "openai":
             # OpenAI (payant)
             if not OPENAI_AVAILABLE:
-                print("⚠️  openai non installé. Installez avec: pip install openai")
+                print("[WARNING] openai non installe. Installez avec: pip install openai")
                 return
             
             self.api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -77,11 +82,11 @@ class WineGenAI:
             
             if self.api_key:
                 self.client = OpenAI(api_key=self.api_key)
-                print(f"✅ OpenAI configuré (modèle: {self.model})")
+                print(f"[OK] OpenAI configure (modele: {self.model})")
             else:
-                print("⚠️  OPENAI_API_KEY non trouvée. Les fonctionnalités GenAI seront désactivées.")
+                print("[WARNING] OPENAI_API_KEY non trouvee. Les fonctionnalites GenAI seront desactivees.")
         else:
-            print(f"⚠️  Provider '{provider}' non supporté. Utilisez 'gemini' ou 'openai'.")
+            print(f"[WARNING] Provider '{provider}' non supporte. Utilisez 'gemini' ou 'openai'.")
     
     def _call_api(self, prompt: str, system_prompt: str, function_name: str, max_tokens: int = 200, temperature: float = 0.7) -> Optional[str]:
         """
@@ -102,7 +107,7 @@ class WineGenAI:
         cached_response = self.cache.get(full_prompt, self.model, function_name)
         
         if cached_response:
-            print(f"✅ Cache hit pour {function_name} (économie d'appel API)")
+            print(f"[CACHE] Cache hit pour {function_name} (economie d'appel API)")
             return cached_response
         
         # Appel API si pas en cache
@@ -116,7 +121,20 @@ class WineGenAI:
                         temperature=temperature
                     )
                 )
-                result = response.text.strip()
+                # Récupérer le texte complet - vérifier plusieurs méthodes
+                if hasattr(response, 'text') and response.text:
+                    result = response.text.strip()
+                elif hasattr(response, 'candidates') and response.candidates:
+                    # Récupérer depuis les candidates si disponible
+                    text_parts = []
+                    for candidate in response.candidates:
+                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                            for part in candidate.content.parts:
+                                if hasattr(part, 'text'):
+                                    text_parts.append(part.text)
+                    result = ' '.join(text_parts).strip() if text_parts else None
+                else:
+                    result = None
                 
             elif self.provider == "openai" and self.client:
                 # OpenAI
@@ -136,12 +154,17 @@ class WineGenAI:
             # Mettre en cache la réponse
             if result:
                 self.cache.set(full_prompt, self.model, function_name, result)
-                print(f"✅ Réponse mise en cache pour {function_name}")
+                print(f"[CACHE] Reponse mise en cache pour {function_name}")
             
             return result
             
         except Exception as e:
-            print(f"❌ Erreur lors de l'appel API ({function_name}): {e}")
+            error_msg = str(e)
+            # Gérer spécifiquement les erreurs de quota
+            if "429" in error_msg or "quota" in error_msg.lower() or "Quota exceeded" in error_msg:
+                print(f"[ERROR] Quota API depasse pour {function_name}. Utilisation du texte de secours.")
+            else:
+                print(f"[ERROR] Erreur lors de l'appel API ({function_name}): {e}")
             return None
     
     def enrich_user_query(self, user_query: str) -> str:
@@ -197,7 +220,7 @@ Requête enrichie:"""
         if not (self.client or self.genai_client):
             return self._generate_fallback_justification(wine, semantic_score)
         
-        system_prompt = "Tu es un sommelier expert qui rédige des notes de dégustation personnalisées."
+        system_prompt = "Tu es un sommelier expert qui rédige des notes de dégustation personnalisées et convaincantes."
         prompt = f"""Un utilisateur cherche un vin avec cette description:
 "{user_query}"
 
@@ -211,11 +234,17 @@ Tu recommandes ce vin:
 - Mots-clés: {wine['mots_cles']}
 - Accords mets: {wine['accords_mets']}
 
-Écris une note de dégustation personnalisée (2-3 phrases) expliquant pourquoi ce vin correspond à sa recherche. Sois convaincant, précis et accessible. Utilise un ton chaleureux et expert.
+Écris une note de dégustation personnalisée de 3-4 phrases complètes qui:
+1. Explique pourquoi ce vin correspond parfaitement à sa recherche
+2. Met en avant les caractéristiques qui matchent avec sa demande
+3. Donne des conseils pratiques d'utilisation (température, moment de dégustation, etc.)
+4. Utilise un ton chaleureux, expert et accessible
+
+IMPORTANT: Réponds UNIQUEMENT avec la note de dégustation, sans introduction ni conclusion. Commence directement par expliquer pourquoi ce vin convient.
 
 Note de dégustation:"""
         
-        justification = self._call_api(prompt, system_prompt, "generate_recommendation_justification", max_tokens=200, temperature=0.8)
+        justification = self._call_api(prompt, system_prompt, "generate_recommendation_justification", max_tokens=300, temperature=0.7)
         return justification if justification else self._generate_fallback_justification(wine, semantic_score)
     
     def generate_food_pairing_analysis(
@@ -238,18 +267,25 @@ Note de dégustation:"""
             return self._generate_fallback_pairing(wine, dish)
         
         dish_context = f" pour accompagner {dish}" if dish else ""
-        system_prompt = "Tu es un sommelier expert qui explique les accords mets-vins de manière pédagogique."
-        prompt = f"""Explique de manière pédagogique pourquoi ce vin s'accorde bien avec les plats suggérés.
+        system_prompt = "Tu es un sommelier expert qui explique les accords mets-vins de manière pédagogique et détaillée."
+        prompt = f"""Explique de manière pédagogique et détaillée pourquoi ce vin s'accorde bien avec les plats suggérés.
 
 Vin: {wine['nom']} ({wine['type']}, {wine['region']})
 Accords suggérés: {wine['accords_mets']}
 Caractéristiques: {wine['mots_cles']}
+Description: {wine['description_narrative']}
 
-Écris une synthèse courte (2-3 phrases) expliquant les principes de l'accord mets-vins pour ce vin{dish_context}. Sois pédagogique et accessible.
+Écris une analyse complète de 3-4 phrases qui:
+1. Explique les principes de l'accord mets-vins pour ce vin spécifique
+2. Détaille pourquoi ces accords fonctionnent (complémentarité, contraste, harmonie)
+3. Donne des conseils pratiques sur la température de service et le moment idéal
+4. Utilise un ton pédagogique, accessible et expert
+
+IMPORTANT: Réponds UNIQUEMENT avec l'analyse, sans introduction. Commence directement par expliquer les accords.
 
 Analyse de l'accord:"""
         
-        analysis = self._call_api(prompt, system_prompt, "generate_food_pairing_analysis", max_tokens=200, temperature=0.7)
+        analysis = self._call_api(prompt, system_prompt, "generate_food_pairing_analysis", max_tokens=300, temperature=0.7)
         return analysis if analysis else self._generate_fallback_pairing(wine, dish)
     
     def _generate_fallback_justification(self, wine: Dict, semantic_score: float) -> str:
@@ -263,55 +299,6 @@ Idéal pour: {wine['accords_mets']}"""
         """Génère une analyse basique sans GenAI"""
         return f"""Les accords suggérés pour ce {wine['type'].lower()} ({wine['mots_cles']}) sont: {wine['accords_mets']}. 
 Ces associations fonctionnent grâce aux caractéristiques du vin qui complètent ou contrastent harmonieusement avec les saveurs des plats."""
-    
-    def generate_progression_plan(
-        self,
-        user_profile: str,
-        query: str,
-        top_wines: List[Dict],
-        avg_semantic_score: float
-    ) -> str:
-        """
-        Génère un plan de progression personnalisé (EF4.2)
-        CONTRAINTE: UN SEUL APPEL API pour le plan complet
-        
-        Args:
-            user_profile: Profil textuel de l'utilisateur (requête enrichie)
-            query: Requête originale de l'utilisateur
-            top_wines: Liste des vins recommandés
-            avg_semantic_score: Score de similarité moyen
-            
-        Returns:
-            Plan de progression textuel
-        """
-        if not (self.client or self.genai_client):
-            return self._generate_fallback_progression({})
-        
-        # Préparer les informations sur les vins recommandés
-        wines_summary = "\n".join([
-            f"- {wine['nom']} ({wine['type']}, {wine['region']})"
-            for wine in top_wines[:3]
-        ])
-        
-        system_prompt = "Tu es un sommelier expert qui crée des plans de progression personnalisés pour les amateurs de vin."
-        prompt = f"""Un utilisateur cherche des vins avec cette description:
-"{query}"
-
-Profil analysé: {user_profile}
-
-Vins recommandés (score moyen: {avg_semantic_score:.1%}):
-{wines_summary}
-
-Génère un plan de progression personnalisé (3-4 phrases) qui:
-1. Identifie les aspects à explorer pour enrichir l'expérience
-2. Propose un chemin de découverte précis (ex: "Explorez les vins de telle région", "Essayez des accords avec...")
-3. Suggère des prochaines étapes concrètes
-
-Plan de progression:"""
-        
-        # UN SEUL APPEL API pour le plan complet
-        plan = self._call_api(prompt, system_prompt, "generate_progression_plan", max_tokens=250, temperature=0.8)
-        return plan if plan else self._generate_fallback_progression({})
     
     def generate_profile_summary(
         self,
@@ -345,23 +332,19 @@ Plan de progression:"""
 Vins recommandés (score de similarité moyen: {average_coverage:.1%}):
 {wines_summary}
 
-Génère une courte biographie professionnelle œnologique (2-3 phrases, style Executive Summary) qui:
-1. Caractérise le profil gustatif de l'utilisateur de manière accrocheuse
-2. Met en avant ses préférences et affinités
-3. Utilise un ton professionnel et engageant
+Génère une biographie professionnelle œnologique complète de 3-4 phrases (style Executive Summary) qui:
+1. Caractérise le profil gustatif de l'utilisateur de manière accrocheuse et détaillée
+2. Met en avant ses préférences et affinités avec des exemples concrets
+3. Suggère des pistes d'exploration pour enrichir son expérience
+4. Utilise un ton professionnel, engageant et accessible
+
+IMPORTANT: Réponds UNIQUEMENT avec la biographie complète, sans introduction. Commence directement par caractériser le profil. Assure-toi que la réponse soit complète et se termine par une phrase de conclusion.
 
 Biographie professionnelle:"""
         
         # UN SEUL APPEL API pour la bio finale
-        summary = self._call_api(prompt, system_prompt, "generate_profile_summary", max_tokens=200, temperature=0.8)
+        summary = self._call_api(prompt, system_prompt, "generate_profile_summary", max_tokens=400, temperature=0.7)
         return summary if summary else self._generate_fallback_summary(user_profile, top_wines)
-    
-    def _generate_fallback_progression(self, block_scores: Dict[str, float]) -> str:
-        """Génère un plan de progression basique sans GenAI"""
-        weak_blocks = [block for block, score in block_scores.items() if score < 0.5]
-        if weak_blocks:
-            return f"Pour enrichir votre expérience, explorez davantage les aspects suivants: {', '.join(weak_blocks)}. Nous vous recommandons d'essayer différents types de vins et accords pour découvrir vos préférences."
-        return "Continuez à explorer différents vins pour affiner vos préférences et découvrir de nouvelles saveurs."
     
     def _generate_fallback_summary(self, user_profile: str, top_wines: List[Dict]) -> str:
         """Génère une synthèse basique sans GenAI"""
