@@ -45,16 +45,11 @@ if 'data_loader' not in st.session_state:
     st.session_state.data_loader = None
 if 'semantic_search' not in st.session_state:
     st.session_state.semantic_search = None
-    # Initialiser GenAI (optionnel)
-    # Utilise Google Gemini 2.5 Flash par défaut (gratuit)
-    # Alternative: WineGenAI(provider="openai") pour OpenAI
     if 'genai' not in st.session_state:
-        # Essayer Gemini d'abord (gratuit), sinon OpenAI si disponible
         gemini_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         if gemini_key:
             st.session_state.genai = WineGenAI(provider="gemini", api_key=gemini_key)
         else:
-            # Fallback sur OpenAI si Gemini non configuré
             st.session_state.genai = WineGenAI(provider="openai")
 if 'embeddings_computed' not in st.session_state:
     st.session_state.embeddings_computed = False
@@ -65,19 +60,14 @@ def initialize_system():
     """Initialise le système de recommandation"""
     csv_path = "Projet IA BDD Vins - BDD Vins.csv"
     
-    # Charger les données
     if st.session_state.data_loader is None:
         with st.spinner("Chargement des données de vins..."):
             st.session_state.data_loader = WineDataLoader(csv_path)
-            # ÉTAPE 1 : Charger la BDD
             st.session_state.data_loader.load_data()
-            # ÉTAPE 2 : Vérifier la BDD (validation)
             st.session_state.data_loader.validate_data()
-            # ÉTAPE 3 : Fusionner les 3 dernières colonnes et préprocesser
             wines = st.session_state.data_loader.preprocess_data()
             st.session_state.wines = wines
     
-    # Initialiser la recherche sémantique
     if st.session_state.semantic_search is None:
         st.session_state.semantic_search = SemanticWineSearch()
         st.session_state.semantic_search.load_model()
@@ -96,7 +86,6 @@ def initialize_system():
             st.session_state.semantic_search.model = old_model
             st.session_state.semantic_search.wine_embeddings = old_embeddings
             st.session_state.semantic_search.wines = old_wines
-        # S'assurer que les wines sont à jour
         if st.session_state.semantic_search.wines != st.session_state.wines:
             st.session_state.semantic_search.wines = st.session_state.wines
     
@@ -790,6 +779,49 @@ def create_radar_chart(characteristics: Dict[str, float]) -> go.Figure:
     
     return fig
 
+def detect_wine_type_preference(query: str) -> Optional[str]:
+    """
+    Détecte les préférences de type de vin dans la requête utilisateur
+    
+    Args:
+        query: Requête textuelle de l'utilisateur
+        
+    Returns:
+        Type de vin préféré ('Rouge', 'Blanc', 'Rosé', 'Bulles') ou None
+    """
+    query_lower = query.lower()
+    
+    # Mots-clés pour chaque type de vin
+    blanc_keywords = ['blanc', 'blancs', 'vin blanc', 'vins blancs', 'blanc de préférence', 
+                     'préfère les blancs', 'prefere les blancs', 'j\'aime les blancs', 
+                     'je préfère les blancs', 'je prefere les blancs', 'blancs uniquement',
+                     'uniquement des blancs', 'seulement des blancs']
+    
+    rouge_keywords = ['rouge', 'rouges', 'vin rouge', 'vins rouges', 'rouge de préférence',
+                     'préfère les rouges', 'prefere les rouges', 'j\'aime les rouges',
+                     'je préfère les rouges', 'je prefere les rouges', 'rouges uniquement',
+                     'uniquement des rouges', 'seulement des rouges']
+    
+    rose_keywords = ['rosé', 'rose', 'rosés', 'roses', 'vin rosé', 'vins rosés', 'rosé de préférence',
+                    'préfère les rosés', 'prefere les roses', 'j\'aime les rosés',
+                    'je préfère les rosés', 'je prefere les roses']
+    
+    bulles_keywords = ['bulles', 'pétillant', 'petillant', 'champagne', 'mousseux', 'bulles de préférence',
+                      'préfère les bulles', 'prefere les bulles', 'j\'aime les bulles',
+                      'je préfère les bulles', 'je prefere les bulles']
+    
+    # Vérifier les préférences (ordre de priorité)
+    if any(kw in query_lower for kw in blanc_keywords):
+        return 'Blanc'
+    elif any(kw in query_lower for kw in rose_keywords):
+        return 'Rosé'
+    elif any(kw in query_lower for kw in bulles_keywords):
+        return 'Bulles'
+    elif any(kw in query_lower for kw in rouge_keywords):
+        return 'Rouge'
+    
+    return None
+
 def search_wines(
     user_query: str,
     top_n: int,
@@ -807,6 +839,14 @@ def search_wines(
     """Effectue la recherche et affiche les résultats"""
     
     with st.spinner("Recherche en cours..."):
+        # Détecter préférence de type dans la description
+        preferred_type = detect_wine_type_preference(user_query)
+        
+        # Appliquer le filtre si préférence détectée et aucune case cochée
+        if preferred_type and (not selected_types or len(selected_types) == 0):
+            selected_types = [preferred_type]
+            st.info(f"🍷 Préférence détectée : {preferred_type}")
+        
         # Enrichir la requête si demandé (seulement si requête < 5 mots)
         genai_available = (hasattr(st.session_state.genai, 'client') and st.session_state.genai.client) or \
                          (hasattr(st.session_state.genai, 'genai_client') and st.session_state.genai.genai_client)
@@ -821,17 +861,9 @@ def search_wines(
         else:
             query_to_use = user_query
         
-        # Préparer les filtres
         filters = {}
-        # Gérer la sélection multiple de types
-        # IMPORTANT : Ne définir filters['type'] que si exactement UN type est sélectionné
-        # Si aucune case n'est cochée OU si plusieurs types sont sélectionnés, ne PAS définir filters['type']
-        # Cela permet à la recherche sémantique de proposer tous les types pertinents
         if selected_types and len(selected_types) == 1:
-            # Un seul type sélectionné via checkbox : on peut l'utiliser pour le scoring mais pas pour filtrer strictement
-            # Le filtrage strict se fait plus bas dans le code
             filters['type'] = selected_types[0]
-        # Si aucune case cochée ou plusieurs types sélectionnés, filters['type'] reste None
         
         if selected_region != "Toutes":
             filters['region'] = selected_region
@@ -840,20 +872,9 @@ def search_wines(
         if cepage:
             filters['cepage'] = cepage
         
-        # Profil gustatif
-        taste_profile = {
-            'astringence': astringence,
-            'acidite': acidite,
-            'intensite_aromatique': intensite_aromatique
-        }
-        
-        # Extraire le plat de la requête pour les accords mets-vins
         dish_info = st.session_state.food_pairing_matcher.extract_dish_from_query(query_to_use)
         
-        # Construire la requête de recherche en incluant les préférences gustatives
         query_parts = [query_to_use]
-        
-        # Ajouter l'intensité aromatique à la requête pour que SBERT puisse matcher
         if intensite_aromatique == 4:  # Fort
             query_parts.append("vin fort puissant intense aromatique explosif")
         elif intensite_aromatique == 3:  # Intense
@@ -865,24 +886,13 @@ def search_wines(
         
         query_for_search = " ".join(query_parts)
         
-        # Enrichir UNIQUEMENT si un plat est détecté (ajouter des termes d'accords)
         if dish_info.get('meat_category') or dish_info.get('dish'):
             query_for_search = st.session_state.food_pairing_matcher.enhance_query_with_pairing(query_for_search)
         
-        # DÉTECTION AUTOMATIQUE DU TYPE DE VIN si aucun type n'est sélectionné
-        # IMPORTANT : Si aucune case n'est cochée, NE PAS FILTRER par type
-        if not filters.get('type') and not selected_types:
-            # Ne pas filtrer par type - laisser la recherche sémantique proposer tous les types pertinents
-            pass
-        
-        # FILTRAGE PAR TYPE UNIQUEMENT SI UNE CASE EST COCHÉE
-        # Si aucune case n'est cochée, ne PAS filtrer - proposer tous les types pertinents
+        # Filtrer par type si un seul type sélectionné
         wines_to_search = st.session_state.wines
-        # Filtrer uniquement si l'utilisateur a explicitement coché au moins une case
         if selected_types and len(selected_types) > 0:
-            # Si plusieurs types sélectionnés, ne pas filtrer strictement (laisser la recherche sémantique)
             if len(selected_types) == 1:
-                # Un seul type sélectionné : filtrer strictement
                 filter_type = selected_types[0].lower()
                 wines_to_search = [
                     wine for wine in wines_to_search 
@@ -891,30 +901,19 @@ def search_wines(
                 if not wines_to_search:
                     st.warning(f"Aucun vin de type '{selected_types[0]}' trouvé dans la base de données.")
                     return
-            # Si plusieurs types sélectionnés, ne pas filtrer - laisser la recherche sémantique proposer parmi ces types
         
-        # Recherche sémantique basée sur le profil textuel complet
-        # Utilisation de la similarité sémantique des embeddings pour mesurer la couverture
-        # Rechercher uniquement dans les vins filtrés
+        # Recherche sémantique
         try:
-            # Utiliser la nouvelle méthode avec filtrage préalable
-            # Augmenter le top_k pour avoir plus de vins à évaluer avec le calcul par blocs
-            # Le calcul par blocs (avec poids élevé sur Accords_Mets) permettra de mieux filtrer
-            # Recherche sémantique : utiliser la requête simplifiée
-            # Réduire top_k pour avoir des résultats plus pertinents
             semantic_results = st.session_state.semantic_search.search_similar_in_wines(
                 query_for_search,
                 wines_to_search,
-                top_k=min(50, len(wines_to_search))  # Top 50 pour avoir des résultats plus pertinents
+                top_k=min(50, len(wines_to_search))
             )
         except AttributeError:
-            # Fallback si la méthode n'existe pas encore (cache Streamlit)
-            # Filtrer manuellement après la recherche
             semantic_results_all = st.session_state.semantic_search.search_similar(
                 query_for_search,
                 top_k=min(50, len(st.session_state.wines))
             )
-            # Filtrer par type après la recherche
             if filters.get('type'):
                 filter_type = filters['type'].lower()
                 semantic_results = [
@@ -924,30 +923,23 @@ def search_wines(
             else:
                 semantic_results = semantic_results_all
         
-        # EF2.2 et EF2.3 : Calcul simple basé uniquement sur la similarité cosinus
-        # Pas de calculs complexes, juste la similarité cosinus entre vecteurs SBERT
         scored_wines = []
         
         for wine, semantic_score in semantic_results:
-            # Filtrer les résultats avec une similarité trop faible (seuil minimum)
-            # Les scores de similarité cosinus sont généralement entre 0.2 et 0.9
-            # On garde seulement ceux avec une similarité >= 0.3 pour avoir des résultats pertinents
             if semantic_score < 0.3:
-                continue  # Ignorer les vins avec une similarité trop faible
+                continue
             
-            # Appliquer les filtres stricts (budget, type si sélectionné)
-            # Mais garder le score sémantique comme score principal
+            if preferred_type:
+                wine_type = wine.get('type', '').strip()
+                if wine_type.lower() != preferred_type.lower():
+                    continue
+            
             final_score = semantic_score
             
-            # Pénalité pour budget dépassé
             if filters.get('budget_max') and wine['prix'] > filters.get('budget_max', float('inf')):
-                final_score *= 0.5  # Réduire de moitié si budget dépassé
-            
-            # DÉTECTION DES NÉGATIONS dans les descriptions
-            # Si le vin dit explicitement "ce n'est pas un vin d'apéro", le pénaliser fortement
+                final_score *= 0.5
             wine_full_text = (wine.get('description_narrative', '') + " " + wine.get('mots_cles', '') + " " + wine.get('accords_mets', '')).lower()
             
-            # Détecter les négations courantes (patterns regex)
             negation_patterns = [
                 r"ce n'?est pas",
                 r"n'?est pas",
@@ -960,11 +952,8 @@ def search_wines(
                 r"aucun"
             ]
             
-            # Contextes à vérifier selon la requête utilisateur
             query_lower = user_query.lower()
             contexts_to_check = []
-            
-            # Détecter le contexte recherché dans la requête
             if any(word in query_lower for word in ['apéro', 'apero', 'apéritif', 'aperitif']):
                 contexts_to_check = ['apéro', 'apero', 'apéritif', 'aperitif']
             elif any(word in query_lower for word in ['viande rouge', 'bœuf', 'boeuf', 'entrecôte', 'steak']):
@@ -974,84 +963,58 @@ def search_wines(
             elif any(word in query_lower for word in ['poisson', 'saumon', 'bar']):
                 contexts_to_check = ['poisson', 'saumon', 'bar']
             
-            # Vérifier si un contexte recherché est mentionné dans une négation
             for context in contexts_to_check:
-                # Chercher le contexte dans le texte
                 if context in wine_full_text:
-                    # Vérifier si c'est dans une phrase négative
-                    # Chercher dans une fenêtre de 60 caractères avant et après le mot
                     context_pos = wine_full_text.find(context)
                     if context_pos != -1:
-                        # Extraire une fenêtre autour du contexte (plus large pour capturer les négations)
                         start = max(0, context_pos - 60)
                         end = min(len(wine_full_text), context_pos + len(context) + 60)
                         context_window = wine_full_text[start:end]
                         
-                        # Vérifier si une négation est présente dans cette fenêtre
                         for pattern in negation_patterns:
                             if re.search(pattern, context_window, re.IGNORECASE):
-                                # Le vin dit explicitement que ce n'est PAS pour ce contexte
-                                # Pénalité très forte : réduire à 5% du score original
                                 final_score *= 0.05
                                 break
             
-            # FILTRAGE PAR TYPE DE VIN selon le plat recherché
             query_lower_type = user_query.lower()
-            
-            # Si l'utilisateur cherche de la viande rouge, EXCLURE les rosés et blancs
             if dish_info.get('meat_category') == 'viande_rouge':
                 wine_type_lower = wine.get('type', '').lower()
-                # Exclure complètement les rosés et blancs pour viande rouge
                 if 'rosé' in wine_type_lower or 'rose' in wine_type_lower or 'blanc' in wine_type_lower:
-                    continue  # EXCLURE ce vin
-                # Les rouges sont OK, les bulles et liquoreux aussi (mais moins appropriés)
-                
-                # EXCLURE les vins pour "veau" si recherche "viande rouge" (veau = viande blanche)
+                    continue
                 wine_accords_check = wine.get('accords_mets', '').lower()
                 wine_desc_check = wine.get('description_narrative', '').lower()
                 wine_full_check = wine_accords_check + " " + wine_desc_check
                 if 'veau' in wine_full_check and 'bœuf' not in wine_full_check and 'boeuf' not in wine_full_check and \
                    'entrecôte' not in wine_full_check and 'steak' not in wine_full_check and \
                    'agneau' not in wine_full_check and 'gigot' not in wine_full_check:
-                    # Le vin mentionne SEULEMENT veau (sans autres viandes rouges) → EXCLURE
-                    continue  # EXCLURE ce vin
-            
-            # Si l'utilisateur cherche un apéro, EXCLURE les rouges (sauf exceptions très rares)
+                    continue
             if any(word in query_lower_type for word in ['apéro', 'apero', 'apéritif', 'aperitif']):
                 wine_type_lower = wine.get('type', '').lower()
                 wine_text_apero = (wine.get('description_narrative', '') + " " + wine.get('mots_cles', '')).lower()
                 
-                # Exclure SEULEMENT les rouges corsés/charpentés pour apéro
-                # Les rouges légers (comme Morgon, Beaujolais) peuvent être pour l'apéro
-                if 'rouge' in wine_type_lower:
-                    # Vérifier si c'est un rouge corsé/charpenté
+                if preferred_type and preferred_type.lower() != 'rouge':
+                    if 'rouge' in wine_type_lower:
+                        continue
+                elif 'rouge' in wine_type_lower:
                     if any(word in wine_text_apero for word in ['corsé', 'corse', 'charpenté', 'charpente', 'puissant', 'généreux', 'structuré', 'tanins', 'corps', 'mâche', 'mache', 'matière']):
-                        continue  # EXCLURE les rouges corsés pour apéro
-                    # Les rouges légers peuvent passer (comme Morgon)
+                        continue
                 
-                # Bonus pour blancs, rosés, bulles
                 if 'blanc' in wine_type_lower or 'rosé' in wine_type_lower or 'rose' in wine_type_lower or 'bulle' in wine_type_lower:
-                    final_score *= 1.15  # Bonus de 15% pour ces types
+                    final_score *= 1.15
                     final_score = min(1.0, final_score)
                 
-                # Si recherche "frais" ou "léger" avec apéro, EXCLURE les vins corsés
                 if any(word in query_lower_type for word in ['frais', 'fraiche', 'fraîche', 'léger', 'leger', 'légers', 'legers']):
                     if any(word in wine_text_apero for word in ['corsé', 'corse', 'charpenté', 'charpente', 'puissant', 'généreux', 'structuré', 'corps', 'mâche', 'mache']):
-                        continue  # EXCLURE complètement les vins corsés si recherche frais/léger
-                
-                # Si recherche "apéro" sans mention de plat spécifique, pénaliser les vins pour plats spécifiques
-                # (ex: "huîtres", "fruits de mer" sans mention d'apéro dans la description)
+                        continue
                 wine_accords_apero = wine.get('accords_mets', '').lower()
                 wine_desc_apero = wine.get('description_narrative', '').lower()
                 wine_full_apero = wine_accords_apero + " " + wine_desc_apero
                 
-                # Détecter les plats de REPAS COMPLETS (à exclure pour apéro)
                 meal_dishes = ['cassoulet', 'dinde', 'tarte', 'tartes', 'rôti', 'roti', 'gigot', 'entrecôte', 'steak', 
                               'côte de bœuf', 'cote de boeuf', 'côte de boeuf', 'cote de bœuf', 'bœuf', 'boeuf',
                               'canard', 'magret', 'poulet rôti', 'poulet roti', 'poularde', 'chapon', 'plat', 'plats',
                               'repas', 'dîner', 'diner', 'déjeuner', 'dejeuner', 'menu', 'recette', 'recettes']
                 
-                # Détecter les accords d'APÉRO (à prioriser)
                 apero_foods = ['fromage', 'fromages', 'charcuterie', 'charcuteries', 'tapas', 'amuse-bouches', 
                               'amuse bouches', 'amuses-bouches', 'cacahuètes', 'cacahuetes', 'olives', 'biscuits',
                               'biscuit', 'chips', 'noix', 'noisettes', 'amandes', 'saucisson', 'saucissons',
@@ -1064,37 +1027,28 @@ def search_wines(
                 has_apero_mention = any(word in wine_full_apero for word in ['apéro', 'apero', 'apéritif', 'aperitif', 
                                                                               'soif', 'désaltérant', 'desalterant', 'dimanche midi', 'vin du dimanche'])
                 
-                # Si la requête cherche juste "apéro" (sans mention de plat spécifique)
                 query_has_specific_dish = any(word in query_lower_type for word in ['huîtres', 'huitres', 'crevettes', 'fruits de mer', 
                                                                                      'coquillages', 'poisson', 'saumon', 'bar', 'sole', 'plateau'])
                 
                 if not query_has_specific_dish:
-                    # La requête cherche juste "apéro" sans plat spécifique
-                    # EXCLURE les vins pour plats de repas complets (cassoulet, dinde, tarte, etc.)
                     if has_meal_dish and not has_apero_mention:
-                        continue  # EXCLURE les vins pour repas complets si pas mention d'apéro
+                        continue
                     
-                    # PRIORISER les vins avec accords d'apéro (fromage, charcuterie, tapas)
                     if has_apero_food:
-                        final_score *= 1.3  # Bonus de 30% pour accords d'apéro
+                        final_score *= 1.3
                         final_score = min(1.0, final_score)
                     
                     if has_apero_mention:
-                        # Le vin mentionne explicitement "apéro" → bonus très fort (même s'il mentionne aussi un plat)
-                        final_score *= 1.4  # Bonus de 40% (très fort)
+                        final_score *= 1.4
                         final_score = min(1.0, final_score)
                     elif has_specific_dish:
-                        # Le vin est pour un plat spécifique (huîtres, crevettes) mais pas mentionné comme apéro → pénalité
-                        final_score *= 0.5  # Pénalité de 50%
-            
-            # FILTRAGE STRICT pour non-correspondance des accords mets-vins
-            # Si l'utilisateur cherche de la viande rouge, EXCLURE les vins qui mentionnent SEULEMENT viande blanche/poisson
+                        final_score *= 0.5
+            # Filtrage strict des accords mets-vins pour viande rouge
             if dish_info.get('meat_category') == 'viande_rouge':
                 wine_accords = wine.get('accords_mets', '').lower()
                 wine_description = wine.get('description_narrative', '').lower()
                 wine_full_text = wine_accords + " " + wine_description
                 
-                # Mots-clés incompatibles (viande blanche et poisson)
                 incompatible_keywords = [
                     'poulet', 'poularde', 'chapon', 'dinde', 'volaille', 'volailles', 
                     'viande blanche', 'viandes blanches', 'porc',
@@ -1104,13 +1058,10 @@ def search_wines(
                 compatible_keywords = [
                     'bœuf', 'boeuf', 'entrecôte', 'steak', 'bavette', 'rumsteck', 'onglet',
                     'agneau', 'gigot', 'mouton', 'côtelette', 'carré', 'épaule',
-                    # Note: 'veau' peut être les deux, mais si le vin dit explicitement "viande blanche", on l'exclut
                     'gibier', 'viande rouge', 'viandes rouges', 'sanglier', 'chevreuil', 'cerf',
                     'canard', 'magret', 'confit', 'côte de bœuf', 'côte de boeuf'
                 ]
                 
-                # Vérifier si le vin dit explicitement "viande blanche" ou "poisson" dans la description
-                # Même si c'est un rouge, si la description dit clairement "pour poisson/viande blanche", l'exclure
                 explicit_incompatible_phrases = [
                     'pour accompagner un poisson', 'pour poisson', 'avec poisson',
                     'pour viande blanche', 'avec viande blanche', 'viande blanche sans',
@@ -1122,41 +1073,29 @@ def search_wines(
                 has_incompatible = any(kw in wine_full_text for kw in incompatible_keywords)
                 has_compatible = any(kw in wine_full_text for kw in compatible_keywords)
                 
-                # CAS 0 : Le vin dit explicitement "pour poisson/viande blanche" → EXCLURE immédiatement
+                # Exclure si mention explicite incompatible
                 if has_explicit_incompatible_phrase:
-                    continue  # EXCLURE ce vin (même si c'est un rouge)
-                
-                # CAS 1 : Le vin mentionne SEULEMENT viande blanche/poisson → EXCLURE complètement
+                    continue
+                # Exclure si seulement incompatible
                 if has_incompatible and not has_compatible:
-                    continue  # EXCLURE ce vin
-                
-                # CAS 2 : Le vin ne mentionne AUCUN accord (ni compatible ni incompatible)
-                # Si c'est un rouge sans accords clairs, on le garde mais avec pénalité
+                    continue
+                # Pénalité si aucun accord ou mixte
                 elif not has_compatible and not has_incompatible:
-                    # Rouge sans accords spécifiques → pénalité modérée (peut-être un rouge léger)
                     final_score *= 0.6
-                
-                # CAS 3 : Le vin mentionne les deux (compatible ET incompatible)
                 elif has_incompatible and has_compatible:
-                    # Le vin mentionne les deux : pénalité forte car incohérent
-                    final_score *= 0.3  # Réduire à 30% (pénalité très forte)
-                
-                # CAS 4 : Le vin mentionne SEULEMENT de la viande rouge : bonus
+                    final_score *= 0.3
+                # Bonus si seulement compatible
                 elif has_compatible:
-                    # Le vin mentionne SEULEMENT de la viande rouge : bonus léger
-                    final_score *= 1.15  # Augmenter de 15%
-                    final_score = min(1.0, final_score)  # Ne pas dépasser 1.0
+                    final_score *= 1.15
+                    final_score = min(1.0, final_score)
             
             elif dish_info.get('meat_category') == 'viande_blanche':
+                # Exclure rouges corsés pour viande blanche
                 wine_type_lower = wine.get('type', '').lower()
-                # Exclure les rouges très corsés pour viande blanche (mais garder les rouges légers)
-                # On garde les blancs, rosés, bulles
                 if 'rouge' in wine_type_lower:
-                    # Vérifier si c'est un rouge corsé (via mots-clés)
                     wine_text_check = (wine.get('mots_cles', '') + " " + wine.get('description_narrative', '')).lower()
                     if any(word in wine_text_check for word in ['corsé', 'charpenté', 'puissant', 'tanins', 'structuré']):
-                        # Rouge corsé → exclure pour viande blanche
-                        continue  # EXCLURE ce vin
+                        continue
                 
                 wine_accords = wine.get('accords_mets', '').lower()
                 compatible_keywords = ['poulet', 'poularde', 'chapon', 'dinde', 'volaille', 'volailles', 'viande blanche', 'viandes blanches', 'porc', 'lapin']
@@ -1166,22 +1105,18 @@ def search_wines(
                 has_incompatible = any(kw in wine_accords for kw in incompatible_keywords)
                 
                 if has_incompatible and not has_compatible:
-                    # Le vin mentionne SEULEMENT viande rouge → EXCLURE complètement
-                    continue  # Ignorer ce vin
+                    continue
                 elif has_incompatible and has_compatible:
-                    # Le vin mentionne les deux : pénalité modérée
-                    final_score *= 0.4  # Réduire à 40%
+                    final_score *= 0.4
                 elif has_compatible:
-                    # Le vin mentionne SEULEMENT viande blanche : bonus léger
                     final_score *= 1.1
                     final_score = min(1.0, final_score)
             
             elif dish_info.get('meat_category') == 'poisson':
+                # Exclure tous les rouges pour poisson
                 wine_type_lower = wine.get('type', '').lower()
-                # Exclure les rouges pour poisson (sauf peut-être les très légers, mais on les exclut quand même pour être sûr)
                 if 'rouge' in wine_type_lower:
-                    continue  # EXCLURE les rouges pour poisson
-                # On garde les blancs, rosés, bulles
+                    continue
                 
                 wine_accords = wine.get('accords_mets', '').lower()
                 compatible_keywords = ['poisson', 'saumon', 'truite', 'thon', 'bar', 'loup', 'sole', 'fruits de mer', 'coquillages', 'crustacés', 'huîtres', 'moules']
@@ -1191,34 +1126,26 @@ def search_wines(
                 has_incompatible = any(kw in wine_accords for kw in incompatible_keywords)
                 
                 if has_incompatible and not has_compatible:
-                    # Le vin mentionne SEULEMENT viande → EXCLURE complètement
-                    continue  # Ignorer ce vin
+                    continue
                 elif has_incompatible and has_compatible:
-                    # Le vin mentionne les deux : pénalité modérée
-                    final_score *= 0.4  # Réduire à 40%
+                    final_score *= 0.4
                 elif has_compatible:
-                    # Le vin mentionne SEULEMENT poisson : bonus léger
                     final_score *= 1.1
                     final_score = min(1.0, final_score)
-            
-            # FILTRAGE SPÉCIFIQUE pour apéro et fromage
             query_lower = user_query.lower()
             if any(word in query_lower for word in ['apéro', 'apero', 'apéritif', 'aperitif']):
                 wine_full_text_apero = (wine.get('description_narrative', '') + " " + wine.get('accords_mets', '') + " " + wine.get('mots_cles', '')).lower()
                 
-                # Vérifier si le vin dit explicitement "ce n'est pas un vin d'apéro"
                 if any(phrase in wine_full_text_apero for phrase in ["ce n'est pas un vin d'apéro", "ce n'est pas un vin d'apero", 
                                                                         "pas un vin d'apéro", "pas un vin d'apero",
                                                                         "pas un petit vin d'apéro", "pas un petit vin d'apero"]):
-                    continue  # EXCLURE ce vin
+                    continue
                 
-                # Détecter les plats de REPAS COMPLETS (à exclure pour apéro)
                 meal_dishes = ['cassoulet', 'dinde', 'tarte', 'tartes', 'rôti', 'roti', 'gigot', 'entrecôte', 'steak', 
                               'côte de bœuf', 'cote de boeuf', 'côte de boeuf', 'cote de bœuf', 'bœuf', 'boeuf',
                               'canard', 'magret', 'poulet rôti', 'poulet roti', 'poularde', 'chapon', 'plat', 'plats',
                               'repas', 'dîner', 'diner', 'déjeuner', 'dejeuner', 'menu', 'recette', 'recettes']
                 
-                # Détecter les accords d'APÉRO (à prioriser)
                 apero_foods = ['fromage', 'fromages', 'charcuterie', 'charcuteries', 'tapas', 'amuse-bouches', 
                               'amuse bouches', 'amuses-bouches', 'cacahuètes', 'cacahuetes', 'olives', 'biscuits',
                               'biscuit', 'chips', 'noix', 'noisettes', 'amandes', 'saucisson', 'saucissons',
@@ -1231,173 +1158,128 @@ def search_wines(
                 has_apero_mention = any(word in wine_full_text_apero for word in ['apéro', 'apero', 'apéritif', 'aperitif', 
                                                                                     'soif', 'désaltérant', 'desalterant', 'dimanche midi'])
                 
-                # Vérifier si la requête mentionne un plat spécifique
                 query_has_specific_dish = any(word in query_lower for word in ['huîtres', 'huitres', 'crevettes', 'fruits de mer', 
                                                                               'coquillages', 'poisson', 'saumon', 'bar', 'sole', 'plateau'])
                 
-                # PRIORITÉ 1 : Bonus TRÈS FORT si le vin mentionne explicitement "apéro", "apéritif", "soif", "désaltérant"
                 if any(word in wine_full_text_apero for word in ['apéro', 'apero', 'apéritif', 'aperitif', 'soif', 'désaltérant', 'desalterant']):
-                    final_score *= 1.5  # Bonus de 50% (très fort)
+                    final_score *= 1.5
                     final_score = min(1.0, final_score)
-                # PRIORITÉ 2 : Bonus FORT si le vin mentionne des accords d'apéro (fromage, charcuterie, tapas)
                 elif has_apero_food:
-                    final_score *= 1.3  # Bonus de 30% pour accords d'apéro
+                    final_score *= 1.3
                     final_score = min(1.0, final_score)
-                # PRIORITÉ 3 : Si recherche "apéro" + "frais" + "fruité", prioriser FORTEMENT ces caractéristiques
                 elif any(word in query_lower for word in ['frais', 'fraiche', 'fraîche', 'fruité', 'fruite', 'fruit']) and \
                      any(word in wine_full_text_apero for word in ['frais', 'fraiche', 'fraîche', 'fruité', 'fruite', 'fruit', 'léger', 'leger', 'vif', 'citronné']):
-                    final_score *= 1.4  # Bonus de 40% pour vins frais ET fruités
+                    final_score *= 1.4
                     final_score = min(1.0, final_score)
-                # PRIORITÉ 4 : Si recherche "apéro" sans plat spécifique, EXCLURE les vins pour plats de repas complets
                 elif not query_has_specific_dish:
                     if has_meal_dish and not has_apero_mention:
-                        continue  # EXCLURE les vins pour repas complets (cassoulet, dinde, tarte) si pas mention d'apéro
-                # PRIORITÉ 5 : Si recherche "apéro" sans plat spécifique, EXCLURE les vins pour plats spécifiques (huîtres, crevettes)
+                        continue
                 elif not query_has_specific_dish and has_specific_dish:
-                    # La requête cherche juste "apéro" mais le vin est pour un plat spécifique (huîtres, crevettes) → EXCLURE
-                    continue  # EXCLURE complètement les vins pour plats spécifiques si recherche juste "apéro"
-                # PRIORITÉ 6 : Bonus modéré pour vins légers/frais/simples (indicateurs d'apéro)
+                    continue
                 elif any(word in wine_full_text_apero for word in ['léger', 'leger', 'frais', 'fraiche', 'fraîche', 'simple', 'efficace', 'citronné', 'vif']):
-                    final_score *= 1.2  # Bonus de 20%
+                    final_score *= 1.2
                     final_score = min(1.0, final_score)
             
-            # FILTRAGE SPÉCIFIQUE pour fromage (frais ou général)
             if any(word in query_lower for word in ['fromage frais', 'fromages frais', 'chèvre frais', 'fromage', 'fromages']):
                 wine_full_text_fromage = (wine.get('accords_mets', '') + " " + wine.get('description_narrative', '')).lower()
                 
-                # Mots-clés compatibles avec fromage frais
                 fromage_frais_keywords = ['fromage frais', 'fromages frais', 'chèvre frais', 'fromage de chèvre', 
                                          'fromages de chèvre', 'charcuterie', 'apéro', 'apero', 'apéritif']
                 
-                # Mots-clés incompatibles (fromages affinés/puissants)
                 fromage_affine_keywords = ['roquefort', 'bleu', 'comté', 'fromage affiné', 'fromages affinés', 
                                           'fromage fort', 'fromages forts']
                 
                 has_fromage_frais = any(kw in wine_full_text_fromage for kw in fromage_frais_keywords)
                 has_fromage_affine = any(kw in wine_full_text_fromage for kw in fromage_affine_keywords)
                 
-                # Si le vin mentionne SEULEMENT des fromages affinés (sans fromage frais/charcuterie)
                 if has_fromage_affine and not has_fromage_frais:
-                    final_score *= 0.5  # Pénalité modérée (peut quand même fonctionner)
-                # Bonus si le vin mentionne explicitement fromage frais/charcuterie
+                    final_score *= 0.5
                 elif has_fromage_frais:
-                    final_score *= 1.15  # Bonus de 15%
+                    final_score *= 1.15
                     final_score = min(1.0, final_score)
-            
-            # Pénalité pour non-correspondance de l'intensité aromatique
-            # Vérifier si le vin correspond à l'intensité demandée
             wine_text = (wine.get('mots_cles', '') + " " + wine.get('description_narrative', '')).lower()
             
-            if intensite_aromatique == 4:  # Fort demandé
-                # Pénaliser si le vin est décrit comme léger ou subtil
+            if intensite_aromatique == 4:
                 if any(word in wine_text for word in ['léger', 'subtil', 'délicat', 'discret', 'fin']):
-                    final_score *= 0.4  # Forte pénalité
-                # Bonus si le vin est décrit comme fort ou intense
+                    final_score *= 0.4
                 elif any(word in wine_text for word in ['fort', 'puissant', 'intense', 'explosif', 'aromatique', 'expressif']):
-                    final_score *= 1.1  # Petit bonus (max 1.0 après normalisation)
-            elif intensite_aromatique == 3:  # Intense demandé
-                # Pénaliser si le vin est décrit comme léger ou discret
+                    final_score *= 1.1
+            elif intensite_aromatique == 3:
                 if any(word in wine_text for word in ['léger', 'subtil', 'délicat', 'discret']):
-                    final_score *= 0.5  # Pénalité modérée
-            elif intensite_aromatique == 1:  # Léger demandé
-                # Pénaliser si le vin est décrit comme fort ou puissant
+                    final_score *= 0.5
+            elif intensite_aromatique == 1:
                 if any(word in wine_text for word in ['fort', 'puissant', 'intense', 'explosif']):
-                    final_score *= 0.4  # Forte pénalité
-                # Bonus si le vin est décrit comme léger ou subtil
+                    final_score *= 0.4
                 elif any(word in wine_text for word in ['léger', 'subtil', 'délicat', 'discret', 'fin']):
-                    final_score *= 1.1  # Petit bonus
-            
-            # FILTRAGE SPÉCIFIQUE pour préférences gustatives (épicé, fruité, etc.)
+                    final_score *= 1.1
             query_lower_prefs = user_query.lower()
             wine_text_prefs = (wine.get('description_narrative', '') + " " + wine.get('mots_cles', '')).lower()
             
             # Préférences épicées
             if any(word in query_lower_prefs for word in ['épicé', 'epice', 'épices', 'epices', 'spicy', 'épicée']):
                 if any(word in wine_text_prefs for word in ['épicé', 'epice', 'épices', 'epices', 'épicée', 'poivre', 'poivré', 'épice']):
-                    final_score *= 1.2  # Bonus de 20% si le vin est épicé
+                    final_score *= 1.2
                     final_score = min(1.0, final_score)
                 else:
-                    final_score *= 0.7  # Pénalité de 30% si le vin n'est pas épicé
+                    final_score *= 0.7
             
             # Préférences fruitées
             if any(word in query_lower_prefs for word in ['fruité', 'fruite', 'fruit', 'fruits', 'fruity']):
                 if any(word in wine_text_prefs for word in ['fruité', 'fruite', 'fruit', 'fruits', 'fruiteux', 'fruitée']):
-                    final_score *= 1.15  # Bonus de 15% si le vin est fruité
+                    final_score *= 1.15
                     final_score = min(1.0, final_score)
                 else:
-                    final_score *= 0.8  # Pénalité de 20% si le vin n'est pas fruité
+                    final_score *= 0.8
             
             # Préférences fraîches
             if any(word in query_lower_prefs for word in ['frais', 'fraiche', 'fraîche', 'fraîch', 'froid', 'froide', 'désaltérant', 'desalterant']):
                 if any(word in wine_text_prefs for word in ['frais', 'fraiche', 'fraîche', 'fraîch', 'froid', 'froide', 'désaltérant', 'desalterant', 'léger', 'leger', 'soif', 'citronné', 'citronne', 'vif', 'simple', 'efficace']):
-                    final_score *= 1.3  # Bonus de 30% si le vin est frais (augmenté)
+                    final_score *= 1.3
                     final_score = min(1.0, final_score)
                 else:
-                    # Si le vin est corsé/charpenté et on cherche frais → pénalité forte
                     if any(word in wine_text_prefs for word in ['corsé', 'corse', 'charpenté', 'charpente', 'puissant', 'généreux', 'structuré', 'corps', 'mâche', 'mache', 'matière']):
-                        final_score *= 0.4  # Pénalité de 60% si corsé alors qu'on cherche frais (augmentée)
+                        final_score *= 0.4
             
             # Préférences minérales
             if any(word in query_lower_prefs for word in ['minéral', 'minerale', 'minéralité', 'mineralite', 'mineral']):
                 if any(word in wine_text_prefs for word in ['minéral', 'minerale', 'minéralité', 'mineralite', 'mineral']):
-                    final_score *= 1.15  # Bonus de 15% si le vin est minéral
+                    final_score *= 1.15
                     final_score = min(1.0, final_score)
             
             # Préférences corsées
             if any(word in query_lower_prefs for word in ['corsé', 'corse', 'puissant', 'charpenté', 'charpente']):
                 if any(word in wine_text_prefs for word in ['corsé', 'corse', 'puissant', 'charpenté', 'charpente', 'structuré']):
-                    final_score *= 1.15  # Bonus de 15% si le vin est corsé
+                    final_score *= 1.15
                     final_score = min(1.0, final_score)
                 else:
-                    final_score *= 0.8  # Pénalité de 20% si le vin n'est pas corsé
+                    final_score *= 0.8
             
-            # Normaliser le score final entre 0 et 1
             final_score = min(1.0, final_score)
             
-            # SEUIL MINIMUM : Exclure les vins avec un score final trop faible après toutes les pénalités
-            # Cela évite de proposer des vins inappropriés même s'ils ont un bon score sémantique initial
+            # Seuil minimum pour exclure les vins inappropriés
             if final_score < 0.2:
-                continue  # Ignorer les vins avec un score final trop faible
-            
-            # Le score final est la similarité cosinus (0-1) avec ajustements
-            # C'est conforme à EF2.2 (SBERT) et EF2.3 (Similarité Cosinus)
+                continue
             scored_wines.append((wine, final_score, semantic_score))
         
-        # Trier par score de similarité cosinus décroissant
+        # Trier et sélectionner le top N
         scored_wines.sort(key=lambda x: x[1], reverse=True)
-        
-        # Prendre le top N (triés par similarité cosinus décroissante)
         top_wines = scored_wines[:top_n]
         
-        # Préparer les données pour le graphique de similarité cosinus
-        # Prendre les top 15 pour le graphique
+        # Préparer les données pour les graphiques
         top_for_chart = min(15, len(semantic_results))
-        
-        # Afficher les scores bruts (non normalisés) pour montrer la vraie similarité cosinus
-        # IMPORTANT : Les scores de similarité cosinus avec SBERT sont généralement entre 0.3-0.7
-        # pour des textes similaires mais pas identiques. C'est NORMAL et attendu.
-        # Un score de 0.4-0.6 indique une bonne correspondance sémantique.
-        # La normalisation min-max masquerait ces informations importantes.
         chart_data = []
         for wine, semantic_score in semantic_results[:top_for_chart]:
             chart_data.append({
                 'nom': wine['nom'],
                 'type': wine['type'],
-                'score_cosinus': semantic_score,  # Score brut (0-1), pas de normalisation
+                'score_cosinus': semantic_score,
                 'score_original': semantic_score
             })
         
-        # Afficher les résultats
         if top_wines:
-            # Messages informatifs retirés pour simplifier l'interface
-            # Affichage direct des recommandations
-            
-            # EF4.3 : Synthèse de Profil (un seul appel API pour la sortie finale)
-            # Vérifier qu'un client GenAI est disponible (client ou genai_client)
             genai_available = (hasattr(st.session_state.genai, 'client') and st.session_state.genai.client) or \
                              (hasattr(st.session_state.genai, 'genai_client') and st.session_state.genai.genai_client)
             if use_genai_justification and genai_available:
-                # Calculer la moyenne des scores de similarité cosinus
                 avg_semantic = sum(score for _, score, _ in top_wines) / len(top_wines) if top_wines else 0
                 with st.spinner("Génération de votre profil œnologique..."):
                     profile_summary = st.session_state.genai.generate_profile_summary(
@@ -1413,9 +1295,7 @@ def search_wines(
             st.markdown("<br>", unsafe_allow_html=True)
             
             for idx, wine_data in enumerate(top_wines, 1):
-                # Structure simplifiée : (wine, final_score, semantic_score)
                 wine, final_score, semantic_score = wine_data
-                # Déterminer la classe CSS selon le type de vin
                 wine_type_lower = wine['type'].lower()
                 type_class = "type-rouge"
                 if "blanc" in wine_type_lower:
@@ -1427,7 +1307,6 @@ def search_wines(
                 elif "liquoreux" in wine_type_lower or "moelleux" in wine_type_lower:
                     type_class = "type-liquoreux"
                 
-                # Échapper le HTML dans toutes les valeurs pour éviter l'interprétation des balises
                 wine_nom = html.escape(str(wine.get('nom', '')))
                 wine_type = html.escape(str(wine.get('type', '')))
                 wine_region = html.escape(str(wine.get('region', '')))
@@ -1436,12 +1315,10 @@ def search_wines(
                 wine_description = html.escape(str(wine.get('description_narrative', '')))
                 wine_accords = html.escape(str(wine.get('accords_mets', 'Non spécifié'))) if wine.get('accords_mets') and wine.get('accords_mets').strip() else 'Non spécifié'
                 
-                # Échapper les mots-clés individuellement
                 mots_cles_list = [html.escape(kw.strip()) for kw in str(wine.get('mots_cles', '')).split(',') if kw.strip()]
                 mots_cles_html = ''.join([f'<span class="keyword-tag">{kw}</span>' for kw in mots_cles_list])
                 
                 with st.container():
-                    # Carte principale
                     st.markdown(f"""
                     <div class="wine-card">
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
@@ -1474,7 +1351,6 @@ def search_wines(
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Justification GenAI (avec cache automatique)
                     genai_available = (hasattr(st.session_state.genai, 'client') and st.session_state.genai.client) or \
                                      (hasattr(st.session_state.genai, 'genai_client') and st.session_state.genai.genai_client)
                     if use_genai_justification and genai_available:
@@ -1484,50 +1360,40 @@ def search_wines(
                                 user_query,
                                 semantic_score
                             )
-                            # Échapper le HTML dans la justification pour éviter l'interprétation des balises
                             justification_escaped = html.escape(str(justification))
                             st.markdown(f'<div style="background: #F5F1E8; padding: 1.5rem; border-radius: 10px; border-left: 4px solid #D4AF37; color: #2C1810; line-height: 1.8;">{justification_escaped}</div>', unsafe_allow_html=True)
                     
-                    # Analyse accord mets-vins
                     if wine['accords_mets']:
                         with st.expander("🍽️ Analyse de l'accord mets-vins", expanded=False):
-                            # Utiliser le plat extrait de la requête
                             dish_for_analysis = dish_info.get('dish') if dish_info.get('dish') else None
                             
-                            # Analyse de l'accord mets-vins générée par IA
                             analysis = st.session_state.genai.generate_food_pairing_analysis(
                                 wine,
                                 dish_for_analysis
                             )
-                            # Échapper le HTML dans l'analyse pour éviter l'interprétation des balises
                             analysis_escaped = html.escape(str(analysis))
                             st.markdown(f'<div style="background: #FFF5E6; padding: 1.5rem; border-radius: 10px; border-left: 4px solid #8B0000; color: #2C1810; line-height: 1.8;">{analysis_escaped}</div>', unsafe_allow_html=True)
                     
                     st.markdown("<br>", unsafe_allow_html=True)
             
-            
-            # Section Data Viz - Visualisations des résultats de recherche
             st.markdown("---")
             st.markdown("### 📊 Data Visualisation - Analyse des Résultats")
             
             if top_wines:
-                # Préparer les données pour les graphiques
                 wines_data = []
                 for wine_data in top_wines:
-                    # Structure simplifiée : (wine, final_score, semantic_score)
                     wine, final_score, semantic_score = wine_data
                     
                     wines_data.append({
                         'nom': wine['nom'][:30] + '...' if len(wine['nom']) > 30 else wine['nom'],
                         'type': wine['type'],
                         'prix': wine['prix'],
-                        'semantic_score': semantic_score,  # Score de similarité cosinus
+                        'semantic_score': semantic_score,
                         'region': wine['region']
                     })
                 
                 wines_df = pd.DataFrame(wines_data)
                 
-                # Graphique 1 : Similarité cosinus des vins recommandés
                 st.markdown("#### 📈 Similarité Cosinus des Vins Recommandés")
                 fig_coverage = px.bar(
                     wines_df,
