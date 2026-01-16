@@ -117,7 +117,7 @@ class SemanticWineSearch:
         if not wines_subset:
             return []
         
-        # ÉTAPE 3 (suite) : Vectoriser le texte utilisateur avec SBERT
+        # Vectoriser le texte utilisateur avec SBERT
         query_embedding = self.model.encode([query], convert_to_numpy=True)
         
         # Créer un mapping des indices des vins filtrés vers les indices dans wine_embeddings
@@ -136,7 +136,7 @@ class SemanticWineSearch:
         if not filtered_indices:
             return []
         
-        # ÉTAPE 4 : Calculer la similarité cosinus entre la requête vectorisée et les vins vectorisés
+        # Calculer la similarité cosinus entre la requête vectorisée et les vins vectorisés
         filtered_embeddings = self.wine_embeddings[filtered_indices]
         similarities = cosine_similarity(query_embedding, filtered_embeddings)[0]
         
