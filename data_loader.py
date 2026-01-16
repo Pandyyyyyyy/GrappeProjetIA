@@ -226,41 +226,81 @@ class WineDataLoader:
         wines = []
         
         for _, row in df_to_use.iterrows():
-            # FUSIONNER UNIQUEMENT LES 3 DERNIÈRES COLONNES DE LA BDD
-            # IMPORTANT : Répéter Accords_Mets plusieurs fois pour lui donner plus de poids
-            # dans l'embedding SBERT (priorité aux accords mets-vins)
-            contexte_parts = []
+            # FUSION INTELLIGENTE : Transformer les mots-clés en TEXTE NARRATIF
+            # SBERT fonctionne mieux avec du texte complet (phrases) qu'avec des mots-clés seuls
+            text_parts = []
             
-            # 1. ACCORDS METS-VINS (RÉPÉTÉ 3 FOIS pour priorité absolue)
-            # C'est l'information la plus importante pour la recherche par contexte/plat
-            if pd.notna(row.get('Accords_Mets')):
-                accords = str(row['Accords_Mets']).strip()
+            # PRIORITÉ 1 : Description complète (si disponible) - TEXTE RICHE
+            if pd.notna(row.get('Description_Complete')):
+                desc_complete = str(row.get('Description_Complete', '')).strip()
+                if desc_complete:
+                    text_parts.append(desc_complete)
+            
+            # PRIORITÉ 2 : Description narrative (texte existant)
+            elif pd.notna(row.get('Description_Narrative')):
+                desc_narrative = str(row.get('Description_Narrative', '')).strip()
+                if desc_narrative:
+                    text_parts.append(desc_narrative)
+            
+            # PRIORITÉ 3 : Accords mets-vins TEXTUEL (si disponible)
+            if pd.notna(row.get('Accords_Mets_Textuel')):
+                accords_textuel = str(row.get('Accords_Mets_Textuel', '')).strip()
+                if accords_textuel:
+                    text_parts.append(accords_textuel)
+            # Fallback : Transformer Accords_Mets (mots-clés) en texte narratif
+            elif pd.notna(row.get('Accords_Mets')):
+                accords = str(row.get('Accords_Mets', '')).strip()
                 if accords:
-                    # Répéter 3 fois pour donner plus de poids dans l'embedding SBERT
-                    contexte_parts.append(accords)
-                    contexte_parts.append(accords)
-                    contexte_parts.append(accords)
+                    # Transformer "bœuf, entrecôte, agneau" en "Ce vin s'accorde avec du bœuf, des entrecôtes et de l'agneau"
+                    accords_list = [a.strip() for a in accords.split(',')]
+                    if len(accords_list) == 1:
+                        accords_text = f"Ce vin s'accorde parfaitement avec {accords_list[0]}."
+                    elif len(accords_list) == 2:
+                        accords_text = f"Ce vin s'accorde parfaitement avec {accords_list[0]} et {accords_list[1]}."
+                    else:
+                        accords_text = f"Ce vin s'accorde parfaitement avec {', '.join(accords_list[:-1])} et {accords_list[-1]}."
+                    text_parts.append(accords_text)
             
-            # 2. MOTS-CLÉS (répété 2 fois pour donner du poids)
+            # PRIORITÉ 4 : Profil sensoriel textuel (si disponible)
+            if pd.notna(row.get('Profil_Sensoriel')):
+                profil = str(row.get('Profil_Sensoriel', '')).strip()
+                if profil:
+                    text_parts.append(f"Profil sensoriel : {profil}")
+            
+            # PRIORITÉ 5 : Mots-clés transformés en texte (moins important)
             if pd.notna(row.get('Mots_Cles')):
                 mots_cles = str(row.get('Mots_Cles', '')).strip()
                 if mots_cles:
-                    contexte_parts.append(mots_cles)
-                    contexte_parts.append(mots_cles)
+                    # Transformer "fruité, tanins, corsé" en "Ce vin présente des caractéristiques fruitées, avec des tanins et un corps corsé"
+                    mots_list = [m.strip() for m in mots_cles.split(',')]
+                    if len(mots_list) > 0:
+                        caracteristiques = f"Caractéristiques : {', '.join(mots_list)}."
+                        text_parts.append(caracteristiques)
             
-            # 3. DESCRIPTION NARRATIVE (une seule fois, en dernier)
-            # La description a été réduite dans la BDD, donc on l'utilise telle quelle
-            if pd.notna(row.get('Description_Narrative')):
-                desc_narrative = str(row.get('Description_Narrative', '')).strip()
-                if desc_narrative:
-                    contexte_parts.append(desc_narrative)
+            # PRIORITÉ 6 : Contexte d'usage (si disponible)
+            if pd.notna(row.get('Contexte_Usage')):
+                contexte = str(row.get('Contexte_Usage', '')).strip()
+                if contexte:
+                    text_parts.append(f"Contexte d'usage : {contexte}")
             
-            # Créer la description fusionnée (uniquement les 3 dernières colonnes)
-            full_description = " ".join(contexte_parts)
+            # Créer la description fusionnée (TEXTE NARRATIF complet)
+            full_description = ". ".join(text_parts)
+            
+            # Si aucune description textuelle n'est disponible, créer un texte minimal
+            if not full_description.strip():
+                type_vin = str(row.get('Type', '')).strip()
+                region = str(row.get('Region', '')).strip()
+                full_description = f"Vin {type_vin} de {region}."
             
             # Extraire le prix numérique
             prix_str = str(row.get('Prix', '€0,00'))
             prix_numeric = self._extract_price(prix_str)
+            
+            # Récupérer les accords mets-vins (nouvelle colonne ou ancienne pour compatibilité)
+            accords_mets = str(row.get('Accords_Mets_Textuel', '') or row.get('Accords_Mets', ''))
+            
+            # Récupérer la description narrative (nouvelle colonne ou ancienne pour compatibilité)
+            description_narrative = str(row.get('Description_Complete', '') or row.get('Description_Narrative', ''))
             
             wine = {
                 'id': int(row.get('ID', 0)),
@@ -270,9 +310,9 @@ class WineDataLoader:
                 'cepages': str(row.get('Cepages', '')),
                 'prix': prix_numeric,
                 'prix_str': prix_str,
-                'description_narrative': str(row.get('Description_Narrative', '')),
+                'description_narrative': description_narrative,
                 'mots_cles': str(row.get('Mots_Cles', '')),
-                'accords_mets': str(row.get('Accords_Mets', '')),
+                'accords_mets': accords_mets,
                 'description_fusionnee': full_description  # Utilise le Super-Champ (Contexte_Complet)
             }
             

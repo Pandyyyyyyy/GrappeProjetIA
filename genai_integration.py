@@ -220,27 +220,29 @@ Requête enrichie:"""
         if not (self.client or self.genai_client):
             return self._generate_fallback_justification(wine, semantic_score)
         
-        system_prompt = "Tu es un sommelier expert qui rédige des notes de dégustation personnalisées et convaincantes."
+        system_prompt = "Tu es un sommelier expert qui rédige des notes de dégustation personnalisées et convaincantes. Tu apportes une VALEUR AJOUTÉE en expliquant le POURQUOI et le COMMENT, sans répéter les informations déjà affichées."
         prompt = f"""Un utilisateur cherche un vin avec cette description:
 "{user_query}"
 
 Tu recommandes ce vin:
-- Nom: {wine['nom']}
-- Type: {wine['type']}
-- Région: {wine['region']}
-- Cépages: {wine['cepages']}
-- Prix: {wine['prix_str']}
-- Description: {wine['description_narrative']}
-- Mots-clés: {wine['mots_cles']}
-- Accords mets: {wine['accords_mets']}
+- Nom: {wine['nom']} ({wine['type']}, {wine['region']})
+- Score de correspondance: {int(semantic_score * 100)}%
+
+CONTRAINTES IMPORTANTES:
+- NE RÉPÈTE PAS la description du vin déjà affichée au-dessus
+- NE RÉPÈTE PAS les mots-clés ou accords déjà visibles
+- APPORTE une VALEUR AJOUTÉE en expliquant le POURQUOI et le COMMENT
 
 Écris une note de dégustation personnalisée de 3-4 phrases complètes qui:
-1. Explique pourquoi ce vin correspond parfaitement à sa recherche
-2. Met en avant les caractéristiques qui matchent avec sa demande
-3. Donne des conseils pratiques d'utilisation (température, moment de dégustation, etc.)
+1. Explique POURQUOI ce vin correspond spécifiquement à sa recherche "{user_query}" (points de correspondance précis)
+2. Détaille COMMENT les caractéristiques du vin répondent à ses besoins (ex: si recherche "vin pour viande rouge", explique pourquoi les tanins/la structure conviennent)
+3. Donne des conseils pratiques UNIQUES (température de service, décantation, moment idéal, durée de garde si pertinent)
 4. Utilise un ton chaleureux, expert et accessible
 
-IMPORTANT: Réponds UNIQUEMENT avec la note de dégustation, sans introduction ni conclusion. Commence directement par expliquer pourquoi ce vin convient.
+IMPORTANT: 
+- Commence directement par expliquer pourquoi ce vin convient à SA recherche spécifique
+- Ne répète PAS les informations déjà affichées dans la carte du vin
+- Apporte des explications et conseils qui ne sont PAS déjà visibles
 
 Note de dégustation:"""
         
@@ -267,21 +269,26 @@ Note de dégustation:"""
             return self._generate_fallback_pairing(wine, dish)
         
         dish_context = f" pour accompagner {dish}" if dish else ""
-        system_prompt = "Tu es un sommelier expert qui explique les accords mets-vins de manière pédagogique et détaillée."
-        prompt = f"""Explique de manière pédagogique et détaillée pourquoi ce vin s'accorde bien avec les plats suggérés.
+        system_prompt = "Tu es un sommelier expert qui explique les accords mets-vins de manière pédagogique et détaillée. Tu apportes une VALEUR AJOUTÉE en expliquant les PRINCIPES ŒNOLOGIQUES, sans répéter les accords déjà affichés."
+        prompt = f"""Vin: {wine['nom']} ({wine['type']}, {wine['region']})
+{"Plat recherché par l'utilisateur: " + dish if dish else ""}
 
-Vin: {wine['nom']} ({wine['type']}, {wine['region']})
-Accords suggérés: {wine['accords_mets']}
-Caractéristiques: {wine['mots_cles']}
-Description: {wine['description_narrative']}
+CONTRAINTES IMPORTANTES:
+- NE RÉPÈTE PAS la liste des accords déjà affichée au-dessus
+- NE RÉPÈTE PAS les caractéristiques déjà visibles
+- APPORTE une VALEUR AJOUTÉE en expliquant les PRINCIPES ŒNOLOGIQUES
 
-Écris une analyse complète de 3-4 phrases qui:
-1. Explique les principes de l'accord mets-vins pour ce vin spécifique
-2. Détaille pourquoi ces accords fonctionnent (complémentarité, contraste, harmonie)
-3. Donne des conseils pratiques sur la température de service et le moment idéal
+Écris une analyse pédagogique complète de 3-4 phrases qui:
+1. Explique les PRINCIPES de l'accord mets-vins pour ce vin spécifique (ex: pourquoi les tanins avec la viande rouge, pourquoi l'acidité avec le poisson)
+2. Détaille COMMENT ces accords fonctionnent (complémentarité des saveurs, contraste des textures, harmonie des arômes) - avec des exemples concrets
+3. Donne des conseils pratiques UNIQUES (température de service précise, décantation si nécessaire, ordre de service)
 4. Utilise un ton pédagogique, accessible et expert
 
-IMPORTANT: Réponds UNIQUEMENT avec l'analyse, sans introduction. Commence directement par expliquer les accords.
+IMPORTANT:
+- Commence directement par expliquer les PRINCIPES œnologiques
+- Ne répète PAS les accords déjà listés dans la carte
+- Apporte des explications techniques et des conseils pratiques qui ne sont PAS déjà visibles
+- Si un plat spécifique est mentionné ({dish if dish else "aucun"}), explique pourquoi ce vin convient particulièrement à CE plat
 
 Analyse de l'accord:"""
         
@@ -291,14 +298,26 @@ Analyse de l'accord:"""
     def _generate_fallback_justification(self, wine: Dict, semantic_score: float) -> str:
         """Génère une justification basique sans GenAI"""
         score_percent = int(semantic_score * 100)
-        return f"""Ce {wine['type'].lower()} de {wine['region']} correspond à votre recherche avec un score de {score_percent}%. 
-{wine['description_narrative']} 
-Idéal pour: {wine['accords_mets']}"""
+        # Ne pas répéter la description déjà affichée, juste expliquer pourquoi c'est pertinent
+        return f"""Ce {wine['type'].lower()} de {wine['region']} correspond à votre recherche avec un score de {score_percent}%, ce qui indique une bonne correspondance sémantique. 
+Les caractéristiques de ce vin répondent particulièrement bien à vos critères. 
+Pour profiter pleinement de ce vin, servez-le à la température appropriée selon son type."""
     
     def _generate_fallback_pairing(self, wine: Dict, dish: Optional[str] = None) -> str:
         """Génère une analyse basique sans GenAI"""
-        return f"""Les accords suggérés pour ce {wine['type'].lower()} ({wine['mots_cles']}) sont: {wine['accords_mets']}. 
-Ces associations fonctionnent grâce aux caractéristiques du vin qui complètent ou contrastent harmonieusement avec les saveurs des plats."""
+        # Ne pas répéter les accords déjà affichés, expliquer les principes
+        type_vin = wine['type'].lower()
+        if type_vin == "rouge":
+            principe = "Les vins rouges s'accordent généralement avec les viandes grâce à leurs tanins qui adoucissent les protéines et équilibrent les saveurs."
+        elif type_vin == "blanc":
+            principe = "Les vins blancs s'accordent avec les poissons et fruits de mer grâce à leur acidité qui nettoie le palais et équilibre les saveurs iodées."
+        elif type_vin == "rosé":
+            principe = "Les rosés s'accordent avec une grande variété de plats grâce à leur équilibre entre fraîcheur et structure."
+        else:
+            principe = "Les caractéristiques de ce vin permettent des accords harmonieux avec les plats suggérés."
+        
+        return f"""Les principes de l'accord mets-vins pour ce {type_vin}: {principe} 
+Les associations suggérées fonctionnent grâce à la complémentarité des saveurs et des textures entre le vin et les mets."""
     
     def generate_profile_summary(
         self,

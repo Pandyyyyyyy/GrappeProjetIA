@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import re
+import html
 from typing import List, Dict, Optional
 from data_loader import WineDataLoader
 from semantic_search import SemanticWineSearch
@@ -28,389 +29,16 @@ st.set_page_config(
 )
 
 # CSS personnalisé - Design professionnel et coloré
-st.markdown("""
-    <style>
-    /* Import Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Variables de couleurs */
-    :root {
-        --wine-red: #8B0000;
-        --wine-burgundy: #722F37;
-        --wine-gold: #D4AF37;
-        --wine-cream: #F5F1E8;
-        --wine-dark: #2C1810;
-        --wine-light: #FFF5E6;
-        --gradient-primary: linear-gradient(135deg, #8B0000 0%, #722F37 50%, #A0522D 100%);
-        --gradient-gold: linear-gradient(135deg, #D4AF37 0%, #F4D03F 100%);
-        --gradient-light: linear-gradient(135deg, #FFF5E6 0%, #F5F1E8 100%);
-    }
-    
-    /* Masquer la barre blanche Streamlit en haut */
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    [data-testid="stHeader"] {display: none;}
-    [data-testid="stToolbar"] {display: none;}
-    
-    /* Style global */
-    .stApp {
-        background: var(--gradient-light);
-        font-family: 'Inter', sans-serif;
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-    
-    /* Ajuster le padding pour compenser la barre supprimée */
-    .main .block-container {
-        padding-top: 2rem !important;
-    }
-    
-    /* Header principal */
-    .main-header {
-        font-family: 'Playfair Display', serif;
-        font-size: 4rem;
-        font-weight: 700;
-        background: var(--gradient-primary);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        text-align: center;
-        margin-bottom: 1rem;
-        text-shadow: 2px 2px 4px rgba(139, 0, 0, 0.1);
-        letter-spacing: -1px;
-    }
-    
-    .subtitle {
-        text-align: center;
-        color: #722F37;
-        font-size: 1.2rem;
-        font-weight: 300;
-        margin-bottom: 2rem;
-        font-style: italic;
-    }
-    
-    /* Sidebar stylisée */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #4A2C2A 0%, #8B4A4A 100%);
-        color: white;
-    }
-    
-    /* Tous les textes de la sidebar en blanc/crème */
-    [data-testid="stSidebar"] * {
-        color: #F5F1E8 !important;
-    }
-    
-    [data-testid="stSidebar"] .stMarkdown h1,
-    [data-testid="stSidebar"] .stMarkdown h2,
-    [data-testid="stSidebar"] .stMarkdown h3,
-    [data-testid="stSidebar"] .stMarkdown h4,
-    [data-testid="stSidebar"] .stMarkdown p,
-    [data-testid="stSidebar"] .stMarkdown label,
-    [data-testid="stSidebar"] .stMarkdown span {
-        color: #F5F1E8 !important;
-        font-family: 'Playfair Display', serif;
-    }
-    
-    /* Labels des inputs */
-    [data-testid="stSidebar"] label {
-        color: #F5F1E8 !important;
-    }
-    
-    /* Textes des selectbox et inputs */
-    [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stNumberInput label,
-    [data-testid="stSidebar"] .stTextInput label,
-    [data-testid="stSidebar"] .stSlider label,
-    [data-testid="stSidebar"] .stCheckbox label {
-        color: #F5F1E8 !important;
-    }
-    
-    /* Inputs et selectbox avec fond clair */
-    [data-testid="stSidebar"] .stSelectbox > div > div,
-    [data-testid="stSidebar"] .stNumberInput > div > div > input,
-    [data-testid="stSidebar"] .stTextInput > div > div > input {
-        background-color: rgba(255, 255, 255, 0.95) !important;
-        color: #2C1810 !important;
-    }
-    
-    /* Checkbox avec texte visible */
-    [data-testid="stSidebar"] .stCheckbox {
-        color: #F5F1E8 !important;
-    }
-    
-    [data-testid="stSidebar"] .stCheckbox label {
-        color: #F5F1E8 !important;
-    }
-    
-    /* Slider labels */
-    [data-testid="stSidebar"] .stSlider label {
-        color: #F5F1E8 !important;
-    }
-    
-    /* Help text */
-    [data-testid="stSidebar"] [data-testid="stTooltipIcon"] {
-        color: #F5F1E8 !important;
-    }
-    
-    /* Expander header */
-    [data-testid="stSidebar"] .streamlit-expanderHeader {
-        background: rgba(255, 255, 255, 0.1) !important;
-        color: #F5F1E8 !important;
-    }
-    
-    [data-testid="stSidebar"] .streamlit-expanderHeader p {
-        color: #F5F1E8 !important;
-    }
-    
-    /* Réduire les espacements dans la sidebar pour tout afficher sans scroll */
-    [data-testid="stSidebar"] .element-container {
-        margin-bottom: 0.5rem !important;
-    }
-    
-    [data-testid="stSidebar"] .stMarkdown {
-        margin-bottom: 0.3rem !important;
-    }
-    
-    [data-testid="stSidebar"] h3 {
-        margin-bottom: 0.5rem !important;
-        font-size: 1.1rem !important;
-    }
-    
-    [data-testid="stSidebar"] .stSlider {
-        margin-top: 0.3rem !important;
-        margin-bottom: 0.3rem !important;
-    }
-    
-    [data-testid="stSidebar"] .stCheckbox {
-        margin-bottom: 0.2rem !important;
-    }
-    
-    [data-testid="stSidebar"] .stCaption {
-        margin-top: 0.2rem !important;
-        font-size: 0.85rem !important;
-    }
-    
-    [data-testid="stSidebar"] hr {
-        margin: 0.5rem 0 !important;
-    }
-    
-    /* Cartes de vin */
-    .wine-card {
-        background: white;
-        padding: 2rem;
-        border-radius: 20px;
-        box-shadow: 0 10px 30px rgba(139, 0, 0, 0.15);
-        margin-bottom: 2rem;
-        border: 2px solid transparent;
-        background-image: linear-gradient(white, white), var(--gradient-primary);
-        background-origin: border-box;
-        background-clip: padding-box, border-box;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    
-    .wine-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 40px rgba(139, 0, 0, 0.25);
-    }
-    
-    /* Badge de score */
-    .score-badge {
-        background: var(--gradient-gold);
-        color: #2C1810;
-        padding: 0.8rem 1.5rem;
-        border-radius: 50px;
-        font-weight: 700;
-        font-size: 1.1rem;
-        box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
-        display: inline-block;
-        text-align: center;
-        min-width: 120px;
-    }
-    
-    /* Badge de type de vin */
-    .wine-type-badge {
-        display: inline-block;
-        padding: 0.4rem 1rem;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        margin-right: 0.5rem;
-        margin-bottom: 0.5rem;
-    }
-    
-    .type-rouge {
-        background: linear-gradient(135deg, #8B0000, #A0522D);
-        color: white;
-    }
-    
-    .type-blanc {
-        background: linear-gradient(135deg, #F5DEB3, #FFE4B5);
-        color: #2C1810;
-    }
-    
-    .type-rose {
-        background: linear-gradient(135deg, #FFB6C1, #FFC0CB);
-        color: #722F37;
-    }
-    
-    .type-bulles {
-        background: linear-gradient(135deg, #FFF8DC, #F0E68C);
-        color: #2C1810;
-    }
-    
-    .type-liquoreux {
-        background: var(--gradient-gold);
-        color: #2C1810;
-    }
-    
-    /* Boutons stylisés */
-    .stButton>button {
-        background: var(--gradient-primary);
-        color: white;
-        border: none;
-        border-radius: 25px;
-        padding: 0.75rem 2rem;
-        font-weight: 600;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(139, 0, 0, 0.3);
-    }
-    
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(139, 0, 0, 0.4);
-    }
-    
-    /* Inputs stylisés */
-    .stTextInput>div>div>input,
-    .stTextArea>div>div>textarea {
-        border-radius: 10px;
-        border: 2px solid #E8DCC6;
-        transition: border-color 0.3s ease;
-    }
-    
-    .stTextInput>div>div>input:focus,
-    .stTextArea>div>div>textarea:focus {
-        border-color: #8B0000;
-        box-shadow: 0 0 0 3px rgba(139, 0, 0, 0.1);
-    }
-    
-    /* Sliders stylisés */
-    .stSlider>div>div>div {
-        background: var(--gradient-primary);
-    }
-    
-    /* Tabs stylisés */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: transparent;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: white;
-        border-radius: 10px 10px 0 0;
-        padding: 1rem 2rem;
-        font-weight: 600;
-        color: #722F37;
-        border: 2px solid #E8DCC6;
-        border-bottom: none;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: var(--gradient-primary);
-        color: white;
-        border-color: #8B0000;
-    }
-    
-    /* Expanders stylisés */
-    .streamlit-expanderHeader {
-        background: linear-gradient(90deg, #F5F1E8, white);
-        border-radius: 10px;
-        font-weight: 600;
-        color: #722F37;
-    }
-    
-    /* Messages de succès/erreur */
-    .stSuccess {
-        background: linear-gradient(90deg, #D4EDDA, #C3E6CB);
-        border-left: 4px solid #28A745;
-        border-radius: 10px;
-        padding: 1rem;
-    }
-    
-    .stWarning {
-        background: linear-gradient(90deg, #FFF3CD, #FFE69C);
-        border-left: 4px solid #FFC107;
-        border-radius: 10px;
-        padding: 1rem;
-    }
-    
-    .stInfo {
-        background: linear-gradient(90deg, #D1ECF1, #BEE5EB);
-        border-left: 4px solid #17A2B8;
-        border-radius: 10px;
-        padding: 1rem;
-    }
-    
-    /* Prix stylisé */
-    .wine-price {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #8B0000;
-        background: var(--gradient-gold);
-        padding: 0.5rem 1rem;
-        border-radius: 10px;
-        display: inline-block;
-        margin: 0.5rem 0;
-    }
-    
-    /* Mots-clés stylisés */
-    .wine-keywords {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin: 1rem 0;
-    }
-    
-    .keyword-tag {
-        background: #E8DCC6;
-        color: #722F37;
-        padding: 0.3rem 0.8rem;
-        border-radius: 15px;
-        font-size: 0.85rem;
-        font-weight: 500;
-    }
-    
-    /* Section d'accords */
-    .food-pairing {
-        background: linear-gradient(135deg, #FFF5E6 0%, #F5F1E8 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid #D4AF37;
-        margin: 1rem 0;
-    }
-    
-    /* Animation de chargement */
-    @keyframes shimmer {
-        0% { background-position: -1000px 0; }
-        100% { background-position: 1000px 0; }
-    }
-    
-    .loading-shimmer {
-        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-        background-size: 1000px 100%;
-        animation: shimmer 2s infinite;
-    }
-    
-    /* Responsive */
-    @media (max-width: 768px) {
-        .main-header {
-            font-size: 2.5rem;
-        }
-    }
-    </style>
-""", unsafe_allow_html=True)
+def load_css():
+    """Charge le CSS depuis le fichier styles.css"""
+    try:
+        with open('styles.css', 'r', encoding='utf-8') as f:
+            css_content = f.read()
+        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.error("⚠️ Fichier styles.css non trouvé. Le style par défaut sera utilisé.")
+
+load_css()
 
 # Initialisation de la session
 if 'data_loader' not in st.session_state:
@@ -592,8 +220,16 @@ def main():
     st.markdown("### 🔍 Recherche de vin")
     st.markdown("---")
     
-    # Onglets
-    tab1, tab2 = st.tabs(["📝 Recherche libre", "📊 Analyses & Statistiques"])
+    # Onglets - utiliser un index pour mémoriser l'onglet actif
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = 0
+    
+    # Si on vient de lancer les tests d'évaluation, forcer l'onglet 3
+    if st.session_state.get('evaluation_just_run', False):
+        st.session_state.active_tab = 2  # Index 2 = onglet 3 (Évaluation)
+        st.session_state.evaluation_just_run = False
+    
+    tab1, tab2, tab3 = st.tabs(["📝 Recherche libre", "📊 Analyses & Statistiques", "🧪 Évaluation"])
     
     with tab1:
         st.markdown("#### 💬 Questionnaire de Recherche")
@@ -643,6 +279,12 @@ def main():
     
     with tab2:
         display_analytics_tab()
+    
+    with tab3:
+        if 'data_loader' in st.session_state and 'semantic_search' in st.session_state:
+            display_evaluation_tab(st.session_state.data_loader, st.session_state.semantic_search)
+        else:
+            st.warning("⚠️ Le système n'est pas encore initialisé. Veuillez patienter...")
 
 def display_analytics_tab():
     """Affiche l'onglet d'analyses et statistiques"""
@@ -729,6 +371,264 @@ def display_analytics_tab():
     st.markdown("#### Top Régions")
     fig_region = visualizer.plot_region_distribution(top_n=15)
     st.plotly_chart(fig_region, width='stretch')
+
+
+def display_evaluation_tab(data_loader: WineDataLoader, semantic_search: SemanticWineSearch):
+    """Affiche l'onglet d'évaluation des performances"""
+    st.markdown("#### 🧪 Évaluation des Performances du Système")
+    st.markdown("---")
+    
+    st.info("""
+    **Métriques d'évaluation formelles** pour mesurer la qualité des recommandations.
+    
+    Ce module calcule :
+    - **Précision@K** : Proportion de vins pertinents dans les K premiers résultats
+    - **Recall@K** : Proportion de vins pertinents retrouvés
+    - **NDCG@K** : Qualité du ranking (les meilleurs vins en premier)
+    - **MRR** : Position du premier vin pertinent
+    """)
+    
+    # Initialiser les résultats dans session_state
+    if 'evaluation_results' not in st.session_state:
+        st.session_state.evaluation_results = None
+    
+    # Mémoriser qu'on est dans l'onglet évaluation
+    st.session_state.current_tab = 'evaluation'
+    
+    # Bouton pour lancer les tests
+    if st.button("🚀 Lancer les tests d'évaluation", type="primary", use_container_width=True, key="run_evaluation"):
+        # Marquer qu'on vient de lancer les tests
+        st.session_state.evaluation_just_run = True
+        with st.spinner("Exécution des tests d'évaluation..."):
+            try:
+                import json
+                from evaluation_metrics import evaluate_recommendations
+                from food_pairing_matcher import FoodPairingMatcher
+                
+                # Charger le dataset de test
+                try:
+                    with open("test_dataset.json", 'r', encoding='utf-8') as f:
+                        test_cases = json.load(f)
+                except FileNotFoundError:
+                    st.error("❌ Fichier test_dataset.json non trouvé. Créez-le avec des cas de test.")
+                    return
+                
+                food_matcher = FoodPairingMatcher()
+                # Utiliser les vins depuis session_state ou data_loader
+                if 'wines' in st.session_state and st.session_state.wines:
+                    all_wines = st.session_state.wines
+                elif hasattr(data_loader, 'wines') and data_loader.wines:
+                    all_wines = data_loader.wines
+                else:
+                    st.error("❌ Les vins ne sont pas encore chargés. Veuillez patienter...")
+                    return
+                
+                # Fonction pour trouver un vin par nom (matching flexible)
+                def find_wine_by_name(wine_name: str):
+                    wine_name_lower = wine_name.lower().strip()
+                    # Nettoyer le nom (enlever guillemets, espaces multiples)
+                    wine_name_clean = wine_name_lower.replace('"', '').replace("'", '').strip()
+                    
+                    for wine in all_wines:
+                        wine_nom = str(wine.get('nom', '')).lower().strip()
+                        wine_nom_clean = wine_nom.replace('"', '').replace("'", '').strip()
+                        
+                        # Correspondance exacte
+                        if wine_nom == wine_name_lower or wine_nom_clean == wine_name_clean:
+                            return wine.get('nom', wine_name)
+                        
+                        # Correspondance partielle (le nom recherché est dans le nom du vin)
+                        if wine_name_clean in wine_nom_clean or wine_nom_clean in wine_name_clean:
+                            return wine.get('nom', wine_name)
+                        
+                        # Matching par région/type si le nom est générique
+                        # Ex: "Sancerre" devrait matcher "Sancerre Rouge" ou "Sancerre Blanc"
+                        if wine_name_clean in wine_nom_clean.split():
+                            return wine.get('nom', wine_name)
+                    
+                    return wine_name
+                
+                # Tester chaque cas
+                results = []
+                precisions = []
+                recalls = []
+                ndcgs = []
+                mrrs = []
+                
+                for i, test_case in enumerate(test_cases, 1):
+                    query = test_case.get('query', '')
+                    relevant_names = test_case.get('relevant_wines', [])
+                    
+                    # Recherche sémantique (on teste la recherche pure, sans filtres)
+                    search_results = semantic_search.search_similar(query, top_k=50)
+                    recommended_wines = [wine for wine, _ in search_results]
+                    scores = [score for _, score in search_results]
+                    
+                    # Trouver les vins pertinents (matching flexible)
+                    relevant_wines = []
+                    for name in relevant_names:
+                        found = find_wine_by_name(name)
+                        # Si on trouve un vin, utiliser son nom exact
+                        if found != name:  # Un vin a été trouvé
+                            relevant_wines.append(found)
+                        else:
+                            # Essayer un matching plus flexible : chercher par région/type
+                            name_lower = name.lower().replace('"', '').replace("'", '').strip()
+                            name_words = name_lower.split()
+                            
+                            best_match = None
+                            best_score = 0
+                            
+                            for wine in all_wines:
+                                wine_nom = str(wine.get('nom', '')).lower()
+                                wine_region = str(wine.get('region', '')).lower()
+                                wine_type = str(wine.get('type', '')).lower()
+                                
+                                score = 0
+                                # Matching exact par nom
+                                if name_lower in wine_nom or wine_nom in name_lower:
+                                    score += 10
+                                # Matching par mots-clés
+                                for word in name_words:
+                                    if len(word) > 3 and word in wine_nom:
+                                        score += 5
+                                # Matching par région
+                                if name_lower in wine_region:
+                                    score += 3
+                                
+                                if score > best_score:
+                                    best_score = score
+                                    best_match = wine.get('nom', name)
+                            
+                            if best_match and best_score > 0:
+                                relevant_wines.append(best_match)
+                            else:
+                                relevant_wines.append(name)  # Garder le nom original si rien trouvé
+                    
+                    # Évaluer
+                    metrics = evaluate_recommendations(
+                        recommended_wines,
+                        relevant_wines,
+                        scores=scores,
+                        k_values=[1, 3, 5]
+                    )
+                    
+                    results.append({
+                        'query': query,
+                        'metrics': metrics,
+                        'top_3': [w.get('nom', 'N/A') for w in recommended_wines[:3]]
+                    })
+                    
+                    precisions.append(metrics.get('precision@3', 0))
+                    recalls.append(metrics.get('recall@3', 0))
+                    ndcgs.append(metrics.get('ndcg@3', 0))
+                    mrrs.append(metrics.get('mrr', 0))
+                
+                # Sauvegarder les résultats dans session_state
+                st.session_state.evaluation_results = {
+                    'results': results,
+                    'precisions': precisions,
+                    'recalls': recalls,
+                    'ndcgs': ndcgs,
+                    'mrrs': mrrs,
+                    'num_tests': len(test_cases)
+                }
+                
+                # Afficher directement les résultats (sans rechargement)
+                st.success(f"✅ {len(test_cases)} tests exécutés avec succès")
+                
+                # Métriques globales
+                st.markdown("### 📊 Métriques Globales")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Précision@3", f"{sum(precisions) / len(precisions) * 100:.1f}%")
+                with col2:
+                    st.metric("Recall@3", f"{sum(recalls) / len(recalls) * 100:.1f}%")
+                with col3:
+                    st.metric("NDCG@3", f"{sum(ndcgs) / len(ndcgs):.3f}")
+                with col4:
+                    st.metric("MRR", f"{sum(mrrs) / len(mrrs):.3f}")
+                
+                # Détails par test
+                st.markdown("### 📋 Détails par Test")
+                for i, result in enumerate(results, 1):
+                    with st.expander(f"Test {i}: {result['query']}"):
+                        metrics = result['metrics']
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.write(f"**Précision@3:** {metrics.get('precision@3', 0):.2%}")
+                        with col2:
+                            st.write(f"**Recall@3:** {metrics.get('recall@3', 0):.2%}")
+                        with col3:
+                            st.write(f"**NDCG@3:** {metrics.get('ndcg@3', 0):.3f}")
+                        with col4:
+                            st.write(f"**MRR:** {metrics.get('mrr', 0):.3f}")
+                        st.write(f"**Top 3 recommandés:** {', '.join(result['top_3'])}")
+                
+            except Exception as e:
+                st.error(f"❌ Erreur lors des tests: {e}")
+                import traceback
+                st.code(traceback.format_exc())
+    
+    # Afficher les résultats sauvegardés si disponibles (pour affichage après rechargement de page)
+    elif st.session_state.evaluation_results:
+        eval_data = st.session_state.evaluation_results
+        results = eval_data['results']
+        precisions = eval_data['precisions']
+        recalls = eval_data['recalls']
+        ndcgs = eval_data['ndcgs']
+        mrrs = eval_data['mrrs']
+        
+        # Afficher les résultats
+        st.success(f"✅ {eval_data['num_tests']} tests exécutés avec succès")
+        
+        # Métriques globales
+        st.markdown("### 📊 Métriques Globales")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Précision@3", f"{sum(precisions) / len(precisions) * 100:.1f}%")
+        with col2:
+            st.metric("Recall@3", f"{sum(recalls) / len(recalls) * 100:.1f}%")
+        with col3:
+            st.metric("NDCG@3", f"{sum(ndcgs) / len(ndcgs):.3f}")
+        with col4:
+            st.metric("MRR", f"{sum(mrrs) / len(mrrs):.3f}")
+        
+        # Détails par test
+        st.markdown("### 📋 Détails par Test")
+        for i, result in enumerate(results, 1):
+            with st.expander(f"Test {i}: {result['query']}"):
+                metrics = result['metrics']
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.write(f"**Précision@3:** {metrics.get('precision@3', 0):.2%}")
+                with col2:
+                    st.write(f"**Recall@3:** {metrics.get('recall@3', 0):.2%}")
+                with col3:
+                    st.write(f"**NDCG@3:** {metrics.get('ndcg@3', 0):.3f}")
+                with col4:
+                    st.write(f"**MRR:** {metrics.get('mrr', 0):.3f}")
+                st.write(f"**Top 3 recommandés:** {', '.join(result['top_3'])}")
+    
+    # Section d'information
+    st.markdown("---")
+    st.markdown("### 📚 Informations")
+    st.markdown("""
+    **Comment utiliser :**
+    1. Cliquez sur "Lancer les tests d'évaluation"
+    2. Le système teste plusieurs requêtes avec le dataset de test
+    3. Les métriques sont calculées et affichées
+    
+    **Fichier de test :** `test_dataset.json`
+    
+    **Métriques expliquées :**
+    - **Précision@3** : Sur 3 vins proposés, combien sont pertinents ?
+    - **Recall@3** : Sur tous les vins pertinents, combien sont retrouvés ?
+    - **NDCG@3** : Le classement est-il bon ? (meilleurs vins en premier)
+    - **MRR** : À quelle position apparaît le premier vin pertinent ?
+    """)
 
 def extract_wine_characteristics(wines: List[Dict]) -> Dict[str, float]:
     """
@@ -1095,28 +995,294 @@ def search_wines(
                                 final_score *= 0.05
                                 break
             
-            # PÉNALITÉ FORTE pour non-correspondance des accords mets-vins
-            # Si l'utilisateur cherche de la viande rouge, pénaliser fortement les vins qui mentionnent du poulet
+            # FILTRAGE PAR TYPE DE VIN selon le plat recherché
+            query_lower_type = user_query.lower()
+            
+            # Si l'utilisateur cherche de la viande rouge, EXCLURE les rosés et blancs
+            if dish_info.get('meat_category') == 'viande_rouge':
+                wine_type_lower = wine.get('type', '').lower()
+                # Exclure complètement les rosés et blancs pour viande rouge
+                if 'rosé' in wine_type_lower or 'rose' in wine_type_lower or 'blanc' in wine_type_lower:
+                    continue  # EXCLURE ce vin
+                # Les rouges sont OK, les bulles et liquoreux aussi (mais moins appropriés)
+                
+                # EXCLURE les vins pour "veau" si recherche "viande rouge" (veau = viande blanche)
+                wine_accords_check = wine.get('accords_mets', '').lower()
+                wine_desc_check = wine.get('description_narrative', '').lower()
+                wine_full_check = wine_accords_check + " " + wine_desc_check
+                if 'veau' in wine_full_check and 'bœuf' not in wine_full_check and 'boeuf' not in wine_full_check and \
+                   'entrecôte' not in wine_full_check and 'steak' not in wine_full_check and \
+                   'agneau' not in wine_full_check and 'gigot' not in wine_full_check:
+                    # Le vin mentionne SEULEMENT veau (sans autres viandes rouges) → EXCLURE
+                    continue  # EXCLURE ce vin
+            
+            # Si l'utilisateur cherche un apéro, EXCLURE les rouges (sauf exceptions très rares)
+            if any(word in query_lower_type for word in ['apéro', 'apero', 'apéritif', 'aperitif']):
+                wine_type_lower = wine.get('type', '').lower()
+                wine_text_apero = (wine.get('description_narrative', '') + " " + wine.get('mots_cles', '')).lower()
+                
+                # Exclure SEULEMENT les rouges corsés/charpentés pour apéro
+                # Les rouges légers (comme Morgon, Beaujolais) peuvent être pour l'apéro
+                if 'rouge' in wine_type_lower:
+                    # Vérifier si c'est un rouge corsé/charpenté
+                    if any(word in wine_text_apero for word in ['corsé', 'corse', 'charpenté', 'charpente', 'puissant', 'généreux', 'structuré', 'tanins', 'corps', 'mâche', 'mache', 'matière']):
+                        continue  # EXCLURE les rouges corsés pour apéro
+                    # Les rouges légers peuvent passer (comme Morgon)
+                
+                # Bonus pour blancs, rosés, bulles
+                if 'blanc' in wine_type_lower or 'rosé' in wine_type_lower or 'rose' in wine_type_lower or 'bulle' in wine_type_lower:
+                    final_score *= 1.15  # Bonus de 15% pour ces types
+                    final_score = min(1.0, final_score)
+                
+                # Si recherche "frais" ou "léger" avec apéro, EXCLURE les vins corsés
+                if any(word in query_lower_type for word in ['frais', 'fraiche', 'fraîche', 'léger', 'leger', 'légers', 'legers']):
+                    if any(word in wine_text_apero for word in ['corsé', 'corse', 'charpenté', 'charpente', 'puissant', 'généreux', 'structuré', 'corps', 'mâche', 'mache']):
+                        continue  # EXCLURE complètement les vins corsés si recherche frais/léger
+                
+                # Si recherche "apéro" sans mention de plat spécifique, pénaliser les vins pour plats spécifiques
+                # (ex: "huîtres", "fruits de mer" sans mention d'apéro dans la description)
+                wine_accords_apero = wine.get('accords_mets', '').lower()
+                wine_desc_apero = wine.get('description_narrative', '').lower()
+                wine_full_apero = wine_accords_apero + " " + wine_desc_apero
+                
+                # Détecter les plats de REPAS COMPLETS (à exclure pour apéro)
+                meal_dishes = ['cassoulet', 'dinde', 'tarte', 'tartes', 'rôti', 'roti', 'gigot', 'entrecôte', 'steak', 
+                              'côte de bœuf', 'cote de boeuf', 'côte de boeuf', 'cote de bœuf', 'bœuf', 'boeuf',
+                              'canard', 'magret', 'poulet rôti', 'poulet roti', 'poularde', 'chapon', 'plat', 'plats',
+                              'repas', 'dîner', 'diner', 'déjeuner', 'dejeuner', 'menu', 'recette', 'recettes']
+                
+                # Détecter les accords d'APÉRO (à prioriser)
+                apero_foods = ['fromage', 'fromages', 'charcuterie', 'charcuteries', 'tapas', 'amuse-bouches', 
+                              'amuse bouches', 'amuses-bouches', 'cacahuètes', 'cacahuetes', 'olives', 'biscuits',
+                              'biscuit', 'chips', 'noix', 'noisettes', 'amandes', 'saucisson', 'saucissons',
+                              'jambon', 'jambons', 'pâté', 'pate', 'pâtés', 'pates', 'rillettes', 'terrine']
+                
+                has_meal_dish = any(word in wine_full_apero for word in meal_dishes)
+                has_apero_food = any(word in wine_full_apero for word in apero_foods)
+                has_specific_dish = any(word in wine_full_apero for word in ['huîtres', 'huitres', 'crevettes', 'fruits de mer', 
+                                                                              'coquillages', 'poisson', 'saumon', 'bar', 'sole', 'turbot'])
+                has_apero_mention = any(word in wine_full_apero for word in ['apéro', 'apero', 'apéritif', 'aperitif', 
+                                                                              'soif', 'désaltérant', 'desalterant', 'dimanche midi', 'vin du dimanche'])
+                
+                # Si la requête cherche juste "apéro" (sans mention de plat spécifique)
+                query_has_specific_dish = any(word in query_lower_type for word in ['huîtres', 'huitres', 'crevettes', 'fruits de mer', 
+                                                                                     'coquillages', 'poisson', 'saumon', 'bar', 'sole', 'plateau'])
+                
+                if not query_has_specific_dish:
+                    # La requête cherche juste "apéro" sans plat spécifique
+                    # EXCLURE les vins pour plats de repas complets (cassoulet, dinde, tarte, etc.)
+                    if has_meal_dish and not has_apero_mention:
+                        continue  # EXCLURE les vins pour repas complets si pas mention d'apéro
+                    
+                    # PRIORISER les vins avec accords d'apéro (fromage, charcuterie, tapas)
+                    if has_apero_food:
+                        final_score *= 1.3  # Bonus de 30% pour accords d'apéro
+                        final_score = min(1.0, final_score)
+                    
+                    if has_apero_mention:
+                        # Le vin mentionne explicitement "apéro" → bonus très fort (même s'il mentionne aussi un plat)
+                        final_score *= 1.4  # Bonus de 40% (très fort)
+                        final_score = min(1.0, final_score)
+                    elif has_specific_dish:
+                        # Le vin est pour un plat spécifique (huîtres, crevettes) mais pas mentionné comme apéro → pénalité
+                        final_score *= 0.5  # Pénalité de 50%
+            
+            # FILTRAGE STRICT pour non-correspondance des accords mets-vins
+            # Si l'utilisateur cherche de la viande rouge, EXCLURE les vins qui mentionnent SEULEMENT viande blanche/poisson
             if dish_info.get('meat_category') == 'viande_rouge':
                 wine_accords = wine.get('accords_mets', '').lower()
-                # Mots-clés incompatibles (viande blanche)
-                incompatible_keywords = ['poulet', 'poularde', 'chapon', 'dinde', 'volaille', 'volailles', 'viande blanche']
-                compatible_keywords = ['bœuf', 'boeuf', 'entrecôte', 'steak', 'agneau', 'gigot', 'mouton', 'veau', 'gibier', 'viande rouge', 'sanglier', 'canard', 'magret']
+                wine_description = wine.get('description_narrative', '').lower()
+                wine_full_text = wine_accords + " " + wine_description
                 
-                has_incompatible = any(kw in wine_accords for kw in incompatible_keywords)
-                has_compatible = any(kw in wine_accords for kw in compatible_keywords)
+                # Mots-clés incompatibles (viande blanche et poisson)
+                incompatible_keywords = [
+                    'poulet', 'poularde', 'chapon', 'dinde', 'volaille', 'volailles', 
+                    'viande blanche', 'viandes blanches', 'porc',
+                    'poisson', 'saumon', 'truite', 'thon', 'bar', 'loup', 'sole', 'turbot',
+                    'fruits de mer', 'coquillages', 'crustacés', 'huîtres', 'moules', 'rouget'
+                ]
+                compatible_keywords = [
+                    'bœuf', 'boeuf', 'entrecôte', 'steak', 'bavette', 'rumsteck', 'onglet',
+                    'agneau', 'gigot', 'mouton', 'côtelette', 'carré', 'épaule',
+                    # Note: 'veau' peut être les deux, mais si le vin dit explicitement "viande blanche", on l'exclut
+                    'gibier', 'viande rouge', 'viandes rouges', 'sanglier', 'chevreuil', 'cerf',
+                    'canard', 'magret', 'confit', 'côte de bœuf', 'côte de boeuf'
+                ]
                 
-                if has_incompatible:
-                    if has_compatible:
-                        # Le vin mentionne les deux : pénalité modérée (mais quand même pénalité)
-                        final_score *= 0.5  # Réduire de moitié
-                    else:
-                        # Le vin mentionne SEULEMENT du poulet/volaille : pénalité très forte
-                        final_score *= 0.15  # Réduire à 15% du score original
+                # Vérifier si le vin dit explicitement "viande blanche" ou "poisson" dans la description
+                # Même si c'est un rouge, si la description dit clairement "pour poisson/viande blanche", l'exclure
+                explicit_incompatible_phrases = [
+                    'pour accompagner un poisson', 'pour poisson', 'avec poisson',
+                    'pour viande blanche', 'avec viande blanche', 'viande blanche sans',
+                    'accompagner un poisson', 'accompagner une viande blanche'
+                ]
+                
+                has_explicit_incompatible_phrase = any(phrase in wine_full_text for phrase in explicit_incompatible_phrases)
+                
+                has_incompatible = any(kw in wine_full_text for kw in incompatible_keywords)
+                has_compatible = any(kw in wine_full_text for kw in compatible_keywords)
+                
+                # CAS 0 : Le vin dit explicitement "pour poisson/viande blanche" → EXCLURE immédiatement
+                if has_explicit_incompatible_phrase:
+                    continue  # EXCLURE ce vin (même si c'est un rouge)
+                
+                # CAS 1 : Le vin mentionne SEULEMENT viande blanche/poisson → EXCLURE complètement
+                if has_incompatible and not has_compatible:
+                    continue  # EXCLURE ce vin
+                
+                # CAS 2 : Le vin ne mentionne AUCUN accord (ni compatible ni incompatible)
+                # Si c'est un rouge sans accords clairs, on le garde mais avec pénalité
+                elif not has_compatible and not has_incompatible:
+                    # Rouge sans accords spécifiques → pénalité modérée (peut-être un rouge léger)
+                    final_score *= 0.6
+                
+                # CAS 3 : Le vin mentionne les deux (compatible ET incompatible)
+                elif has_incompatible and has_compatible:
+                    # Le vin mentionne les deux : pénalité forte car incohérent
+                    final_score *= 0.3  # Réduire à 30% (pénalité très forte)
+                
+                # CAS 4 : Le vin mentionne SEULEMENT de la viande rouge : bonus
                 elif has_compatible:
                     # Le vin mentionne SEULEMENT de la viande rouge : bonus léger
-                    final_score *= 1.1  # Augmenter de 10%
+                    final_score *= 1.15  # Augmenter de 15%
                     final_score = min(1.0, final_score)  # Ne pas dépasser 1.0
+            
+            elif dish_info.get('meat_category') == 'viande_blanche':
+                wine_type_lower = wine.get('type', '').lower()
+                # Exclure les rouges très corsés pour viande blanche (mais garder les rouges légers)
+                # On garde les blancs, rosés, bulles
+                if 'rouge' in wine_type_lower:
+                    # Vérifier si c'est un rouge corsé (via mots-clés)
+                    wine_text_check = (wine.get('mots_cles', '') + " " + wine.get('description_narrative', '')).lower()
+                    if any(word in wine_text_check for word in ['corsé', 'charpenté', 'puissant', 'tanins', 'structuré']):
+                        # Rouge corsé → exclure pour viande blanche
+                        continue  # EXCLURE ce vin
+                
+                wine_accords = wine.get('accords_mets', '').lower()
+                compatible_keywords = ['poulet', 'poularde', 'chapon', 'dinde', 'volaille', 'volailles', 'viande blanche', 'viandes blanches', 'porc', 'lapin']
+                incompatible_keywords = ['bœuf', 'boeuf', 'entrecôte', 'steak', 'agneau', 'gigot', 'mouton', 'veau', 'gibier', 'viande rouge', 'viandes rouges', 'sanglier']
+                
+                has_compatible = any(kw in wine_accords for kw in compatible_keywords)
+                has_incompatible = any(kw in wine_accords for kw in incompatible_keywords)
+                
+                if has_incompatible and not has_compatible:
+                    # Le vin mentionne SEULEMENT viande rouge → EXCLURE complètement
+                    continue  # Ignorer ce vin
+                elif has_incompatible and has_compatible:
+                    # Le vin mentionne les deux : pénalité modérée
+                    final_score *= 0.4  # Réduire à 40%
+                elif has_compatible:
+                    # Le vin mentionne SEULEMENT viande blanche : bonus léger
+                    final_score *= 1.1
+                    final_score = min(1.0, final_score)
+            
+            elif dish_info.get('meat_category') == 'poisson':
+                wine_type_lower = wine.get('type', '').lower()
+                # Exclure les rouges pour poisson (sauf peut-être les très légers, mais on les exclut quand même pour être sûr)
+                if 'rouge' in wine_type_lower:
+                    continue  # EXCLURE les rouges pour poisson
+                # On garde les blancs, rosés, bulles
+                
+                wine_accords = wine.get('accords_mets', '').lower()
+                compatible_keywords = ['poisson', 'saumon', 'truite', 'thon', 'bar', 'loup', 'sole', 'fruits de mer', 'coquillages', 'crustacés', 'huîtres', 'moules']
+                incompatible_keywords = ['bœuf', 'boeuf', 'steak', 'viande rouge', 'viandes rouges', 'agneau', 'gibier', 'poulet', 'volaille']
+                
+                has_compatible = any(kw in wine_accords for kw in compatible_keywords)
+                has_incompatible = any(kw in wine_accords for kw in incompatible_keywords)
+                
+                if has_incompatible and not has_compatible:
+                    # Le vin mentionne SEULEMENT viande → EXCLURE complètement
+                    continue  # Ignorer ce vin
+                elif has_incompatible and has_compatible:
+                    # Le vin mentionne les deux : pénalité modérée
+                    final_score *= 0.4  # Réduire à 40%
+                elif has_compatible:
+                    # Le vin mentionne SEULEMENT poisson : bonus léger
+                    final_score *= 1.1
+                    final_score = min(1.0, final_score)
+            
+            # FILTRAGE SPÉCIFIQUE pour apéro et fromage
+            query_lower = user_query.lower()
+            if any(word in query_lower for word in ['apéro', 'apero', 'apéritif', 'aperitif']):
+                wine_full_text_apero = (wine.get('description_narrative', '') + " " + wine.get('accords_mets', '') + " " + wine.get('mots_cles', '')).lower()
+                
+                # Vérifier si le vin dit explicitement "ce n'est pas un vin d'apéro"
+                if any(phrase in wine_full_text_apero for phrase in ["ce n'est pas un vin d'apéro", "ce n'est pas un vin d'apero", 
+                                                                        "pas un vin d'apéro", "pas un vin d'apero",
+                                                                        "pas un petit vin d'apéro", "pas un petit vin d'apero"]):
+                    continue  # EXCLURE ce vin
+                
+                # Détecter les plats de REPAS COMPLETS (à exclure pour apéro)
+                meal_dishes = ['cassoulet', 'dinde', 'tarte', 'tartes', 'rôti', 'roti', 'gigot', 'entrecôte', 'steak', 
+                              'côte de bœuf', 'cote de boeuf', 'côte de boeuf', 'cote de bœuf', 'bœuf', 'boeuf',
+                              'canard', 'magret', 'poulet rôti', 'poulet roti', 'poularde', 'chapon', 'plat', 'plats',
+                              'repas', 'dîner', 'diner', 'déjeuner', 'dejeuner', 'menu', 'recette', 'recettes']
+                
+                # Détecter les accords d'APÉRO (à prioriser)
+                apero_foods = ['fromage', 'fromages', 'charcuterie', 'charcuteries', 'tapas', 'amuse-bouches', 
+                              'amuse bouches', 'amuses-bouches', 'cacahuètes', 'cacahuetes', 'olives', 'biscuits',
+                              'biscuit', 'chips', 'noix', 'noisettes', 'amandes', 'saucisson', 'saucissons',
+                              'jambon', 'jambons', 'pâté', 'pate', 'pâtés', 'pates', 'rillettes', 'terrine']
+                
+                has_meal_dish = any(word in wine_full_text_apero for word in meal_dishes)
+                has_apero_food = any(word in wine_full_text_apero for word in apero_foods)
+                has_specific_dish = any(word in wine_full_text_apero for word in ['huîtres', 'huitres', 'crevettes', 'fruits de mer', 
+                                                                                  'coquillages', 'poisson', 'saumon', 'bar', 'sole'])
+                has_apero_mention = any(word in wine_full_text_apero for word in ['apéro', 'apero', 'apéritif', 'aperitif', 
+                                                                                    'soif', 'désaltérant', 'desalterant', 'dimanche midi'])
+                
+                # Vérifier si la requête mentionne un plat spécifique
+                query_has_specific_dish = any(word in query_lower for word in ['huîtres', 'huitres', 'crevettes', 'fruits de mer', 
+                                                                              'coquillages', 'poisson', 'saumon', 'bar', 'sole', 'plateau'])
+                
+                # PRIORITÉ 1 : Bonus TRÈS FORT si le vin mentionne explicitement "apéro", "apéritif", "soif", "désaltérant"
+                if any(word in wine_full_text_apero for word in ['apéro', 'apero', 'apéritif', 'aperitif', 'soif', 'désaltérant', 'desalterant']):
+                    final_score *= 1.5  # Bonus de 50% (très fort)
+                    final_score = min(1.0, final_score)
+                # PRIORITÉ 2 : Bonus FORT si le vin mentionne des accords d'apéro (fromage, charcuterie, tapas)
+                elif has_apero_food:
+                    final_score *= 1.3  # Bonus de 30% pour accords d'apéro
+                    final_score = min(1.0, final_score)
+                # PRIORITÉ 3 : Si recherche "apéro" + "frais" + "fruité", prioriser FORTEMENT ces caractéristiques
+                elif any(word in query_lower for word in ['frais', 'fraiche', 'fraîche', 'fruité', 'fruite', 'fruit']) and \
+                     any(word in wine_full_text_apero for word in ['frais', 'fraiche', 'fraîche', 'fruité', 'fruite', 'fruit', 'léger', 'leger', 'vif', 'citronné']):
+                    final_score *= 1.4  # Bonus de 40% pour vins frais ET fruités
+                    final_score = min(1.0, final_score)
+                # PRIORITÉ 4 : Si recherche "apéro" sans plat spécifique, EXCLURE les vins pour plats de repas complets
+                elif not query_has_specific_dish:
+                    if has_meal_dish and not has_apero_mention:
+                        continue  # EXCLURE les vins pour repas complets (cassoulet, dinde, tarte) si pas mention d'apéro
+                # PRIORITÉ 5 : Si recherche "apéro" sans plat spécifique, EXCLURE les vins pour plats spécifiques (huîtres, crevettes)
+                elif not query_has_specific_dish and has_specific_dish:
+                    # La requête cherche juste "apéro" mais le vin est pour un plat spécifique (huîtres, crevettes) → EXCLURE
+                    continue  # EXCLURE complètement les vins pour plats spécifiques si recherche juste "apéro"
+                # PRIORITÉ 6 : Bonus modéré pour vins légers/frais/simples (indicateurs d'apéro)
+                elif any(word in wine_full_text_apero for word in ['léger', 'leger', 'frais', 'fraiche', 'fraîche', 'simple', 'efficace', 'citronné', 'vif']):
+                    final_score *= 1.2  # Bonus de 20%
+                    final_score = min(1.0, final_score)
+            
+            # FILTRAGE SPÉCIFIQUE pour fromage (frais ou général)
+            if any(word in query_lower for word in ['fromage frais', 'fromages frais', 'chèvre frais', 'fromage', 'fromages']):
+                wine_full_text_fromage = (wine.get('accords_mets', '') + " " + wine.get('description_narrative', '')).lower()
+                
+                # Mots-clés compatibles avec fromage frais
+                fromage_frais_keywords = ['fromage frais', 'fromages frais', 'chèvre frais', 'fromage de chèvre', 
+                                         'fromages de chèvre', 'charcuterie', 'apéro', 'apero', 'apéritif']
+                
+                # Mots-clés incompatibles (fromages affinés/puissants)
+                fromage_affine_keywords = ['roquefort', 'bleu', 'comté', 'fromage affiné', 'fromages affinés', 
+                                          'fromage fort', 'fromages forts']
+                
+                has_fromage_frais = any(kw in wine_full_text_fromage for kw in fromage_frais_keywords)
+                has_fromage_affine = any(kw in wine_full_text_fromage for kw in fromage_affine_keywords)
+                
+                # Si le vin mentionne SEULEMENT des fromages affinés (sans fromage frais/charcuterie)
+                if has_fromage_affine and not has_fromage_frais:
+                    final_score *= 0.5  # Pénalité modérée (peut quand même fonctionner)
+                # Bonus si le vin mentionne explicitement fromage frais/charcuterie
+                elif has_fromage_frais:
+                    final_score *= 1.15  # Bonus de 15%
+                    final_score = min(1.0, final_score)
             
             # Pénalité pour non-correspondance de l'intensité aromatique
             # Vérifier si le vin correspond à l'intensité demandée
@@ -1141,8 +1307,57 @@ def search_wines(
                 elif any(word in wine_text for word in ['léger', 'subtil', 'délicat', 'discret', 'fin']):
                     final_score *= 1.1  # Petit bonus
             
+            # FILTRAGE SPÉCIFIQUE pour préférences gustatives (épicé, fruité, etc.)
+            query_lower_prefs = user_query.lower()
+            wine_text_prefs = (wine.get('description_narrative', '') + " " + wine.get('mots_cles', '')).lower()
+            
+            # Préférences épicées
+            if any(word in query_lower_prefs for word in ['épicé', 'epice', 'épices', 'epices', 'spicy', 'épicée']):
+                if any(word in wine_text_prefs for word in ['épicé', 'epice', 'épices', 'epices', 'épicée', 'poivre', 'poivré', 'épice']):
+                    final_score *= 1.2  # Bonus de 20% si le vin est épicé
+                    final_score = min(1.0, final_score)
+                else:
+                    final_score *= 0.7  # Pénalité de 30% si le vin n'est pas épicé
+            
+            # Préférences fruitées
+            if any(word in query_lower_prefs for word in ['fruité', 'fruite', 'fruit', 'fruits', 'fruity']):
+                if any(word in wine_text_prefs for word in ['fruité', 'fruite', 'fruit', 'fruits', 'fruiteux', 'fruitée']):
+                    final_score *= 1.15  # Bonus de 15% si le vin est fruité
+                    final_score = min(1.0, final_score)
+                else:
+                    final_score *= 0.8  # Pénalité de 20% si le vin n'est pas fruité
+            
+            # Préférences fraîches
+            if any(word in query_lower_prefs for word in ['frais', 'fraiche', 'fraîche', 'fraîch', 'froid', 'froide', 'désaltérant', 'desalterant']):
+                if any(word in wine_text_prefs for word in ['frais', 'fraiche', 'fraîche', 'fraîch', 'froid', 'froide', 'désaltérant', 'desalterant', 'léger', 'leger', 'soif', 'citronné', 'citronne', 'vif', 'simple', 'efficace']):
+                    final_score *= 1.3  # Bonus de 30% si le vin est frais (augmenté)
+                    final_score = min(1.0, final_score)
+                else:
+                    # Si le vin est corsé/charpenté et on cherche frais → pénalité forte
+                    if any(word in wine_text_prefs for word in ['corsé', 'corse', 'charpenté', 'charpente', 'puissant', 'généreux', 'structuré', 'corps', 'mâche', 'mache', 'matière']):
+                        final_score *= 0.4  # Pénalité de 60% si corsé alors qu'on cherche frais (augmentée)
+            
+            # Préférences minérales
+            if any(word in query_lower_prefs for word in ['minéral', 'minerale', 'minéralité', 'mineralite', 'mineral']):
+                if any(word in wine_text_prefs for word in ['minéral', 'minerale', 'minéralité', 'mineralite', 'mineral']):
+                    final_score *= 1.15  # Bonus de 15% si le vin est minéral
+                    final_score = min(1.0, final_score)
+            
+            # Préférences corsées
+            if any(word in query_lower_prefs for word in ['corsé', 'corse', 'puissant', 'charpenté', 'charpente']):
+                if any(word in wine_text_prefs for word in ['corsé', 'corse', 'puissant', 'charpenté', 'charpente', 'structuré']):
+                    final_score *= 1.15  # Bonus de 15% si le vin est corsé
+                    final_score = min(1.0, final_score)
+                else:
+                    final_score *= 0.8  # Pénalité de 20% si le vin n'est pas corsé
+            
             # Normaliser le score final entre 0 et 1
             final_score = min(1.0, final_score)
+            
+            # SEUIL MINIMUM : Exclure les vins avec un score final trop faible après toutes les pénalités
+            # Cela évite de proposer des vins inappropriés même s'ils ont un bon score sémantique initial
+            if final_score < 0.2:
+                continue  # Ignorer les vins avec un score final trop faible
             
             # Le score final est la similarité cosinus (0-1) avec ajustements
             # C'est conforme à EF2.2 (SBERT) et EF2.3 (Similarité Cosinus)
@@ -1212,6 +1427,19 @@ def search_wines(
                 elif "liquoreux" in wine_type_lower or "moelleux" in wine_type_lower:
                     type_class = "type-liquoreux"
                 
+                # Échapper le HTML dans toutes les valeurs pour éviter l'interprétation des balises
+                wine_nom = html.escape(str(wine.get('nom', '')))
+                wine_type = html.escape(str(wine.get('type', '')))
+                wine_region = html.escape(str(wine.get('region', '')))
+                wine_cepages = html.escape(str(wine.get('cepages', '')))
+                wine_prix = html.escape(str(wine.get('prix_str', '')))
+                wine_description = html.escape(str(wine.get('description_narrative', '')))
+                wine_accords = html.escape(str(wine.get('accords_mets', 'Non spécifié'))) if wine.get('accords_mets') and wine.get('accords_mets').strip() else 'Non spécifié'
+                
+                # Échapper les mots-clés individuellement
+                mots_cles_list = [html.escape(kw.strip()) for kw in str(wine.get('mots_cles', '')).split(',') if kw.strip()]
+                mots_cles_html = ''.join([f'<span class="keyword-tag">{kw}</span>' for kw in mots_cles_list])
+                
                 with st.container():
                     # Carte principale
                     st.markdown(f"""
@@ -1219,29 +1447,29 @@ def search_wines(
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
                             <div style="flex: 1;">
                                 <h2 style="color: #2C1810; margin-bottom: 0.5rem; font-family: 'Playfair Display', serif;">
-                                    🍷 {idx}. {wine['nom']}
+                                    🍷 {idx}. {wine_nom}
                                 </h2>
                                 <div style="margin: 1rem 0;">
-                                    <span class="wine-type-badge {type_class}">{wine['type']}</span>
-                                    <span style="color: #722F37; font-weight: 600;">📍 {wine['region']}</span>
+                                    <span class="wine-type-badge {type_class}">{wine_type}</span>
+                                    <span style="color: #722F37; font-weight: 600;">📍 {wine_region}</span>
                                 </div>
                                 <div style="margin: 0.5rem 0;">
-                                    <span style="color: #722F37;">🍇 {wine['cepages']}</span>
+                                    <span style="color: #722F37;">🍇 {wine_cepages}</span>
                                 </div>
-                                <div class="wine-price">{wine['prix_str']}</div>
+                                <div class="wine-price">{wine_prix}</div>
                             </div>
                             <div style="text-align: center;">
                                 <div class="score-badge">⭐ {int(semantic_score * 100)}%</div>
                             </div>
                         </div>
                         <p style="color: #555; font-style: italic; line-height: 1.6; margin: 1rem 0;">
-                            {wine['description_narrative']}
+                            {wine_description}
                         </p>
                         <div class="wine-keywords">
-                            {''.join([f'<span class="keyword-tag">{kw.strip()}</span>' for kw in wine['mots_cles'].split(',') if kw.strip()])}
+                            {mots_cles_html}
                         </div>
                         <div class="food-pairing">
-                            <strong style="color: #722F37;">🍽️ Accords mets:</strong> {wine['accords_mets']}
+                            <strong style="color: #722F37;">🍽️ Accords mets:</strong> {wine_accords}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -1256,7 +1484,9 @@ def search_wines(
                                 user_query,
                                 semantic_score
                             )
-                            st.markdown(f'<div style="background: #F5F1E8; padding: 1.5rem; border-radius: 10px; border-left: 4px solid #D4AF37; color: #2C1810; line-height: 1.8;">{justification}</div>', unsafe_allow_html=True)
+                            # Échapper le HTML dans la justification pour éviter l'interprétation des balises
+                            justification_escaped = html.escape(str(justification))
+                            st.markdown(f'<div style="background: #F5F1E8; padding: 1.5rem; border-radius: 10px; border-left: 4px solid #D4AF37; color: #2C1810; line-height: 1.8;">{justification_escaped}</div>', unsafe_allow_html=True)
                     
                     # Analyse accord mets-vins
                     if wine['accords_mets']:
@@ -1269,7 +1499,9 @@ def search_wines(
                                 wine,
                                 dish_for_analysis
                             )
-                            st.markdown(f'<div style="background: #FFF5E6; padding: 1.5rem; border-radius: 10px; border-left: 4px solid #8B0000; color: #2C1810; line-height: 1.8;">{analysis}</div>', unsafe_allow_html=True)
+                            # Échapper le HTML dans l'analyse pour éviter l'interprétation des balises
+                            analysis_escaped = html.escape(str(analysis))
+                            st.markdown(f'<div style="background: #FFF5E6; padding: 1.5rem; border-radius: 10px; border-left: 4px solid #8B0000; color: #2C1810; line-height: 1.8;">{analysis_escaped}</div>', unsafe_allow_html=True)
                     
                     st.markdown("<br>", unsafe_allow_html=True)
             

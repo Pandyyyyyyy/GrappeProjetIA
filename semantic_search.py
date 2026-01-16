@@ -36,7 +36,7 @@ class SemanticWineSearch:
     
     def compute_embeddings(self, wines: List[Dict], force_recompute: bool = False):
         """
-        ÉTAPE 3 : Vectorise en SBERT la colonne fusionnée (description_fusionnee)
+        Vectorise en SBERT la colonne fusionnée (description_fusionnee)
         Cette méthode vectorise les descriptions fusionnées des vins avec le modèle SBERT
         
         Args:

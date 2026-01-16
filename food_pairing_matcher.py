@@ -2,6 +2,7 @@
 Module de matching des accords mets-vins
 """
 import re
+import unicodedata
 from typing import Dict, List, Optional, Tuple
 
 
@@ -72,10 +73,23 @@ class FoodPairingMatcher:
             'keywords': []
         }
         
-        # Chercher les catégories de viande
+        # Chercher les catégories de viande (recherche améliorée avec normalisation)
+        # Normaliser la requête pour gérer les accents et variations (ex: "côte de bœuf" vs "cote de boeuf")
+        query_normalized = unicodedata.normalize('NFKD', query_lower).encode('ascii', 'ignore').decode('ascii')
+        
         for category, keywords in self.MEAT_CATEGORIES.items():
             for keyword in keywords:
-                if keyword in query_lower:
+                keyword_lower = keyword.lower()
+                keyword_normalized = unicodedata.normalize('NFKD', keyword_lower).encode('ascii', 'ignore').decode('ascii')
+                
+                # Recherche exacte (avec accents) - priorité
+                if keyword_lower in query_lower:
+                    extracted['meat_category'] = category
+                    extracted['dish'] = keyword
+                    break
+                # Recherche normalisée (sans accents) pour "côte de bœuf" vs "cote de boeuf"
+                elif keyword_normalized in query_normalized and len(keyword_normalized) > 2:
+                    # Vérifier que le mot normalisé fait au moins 3 caractères pour éviter les faux positifs
                     extracted['meat_category'] = category
                     extracted['dish'] = keyword
                     break
