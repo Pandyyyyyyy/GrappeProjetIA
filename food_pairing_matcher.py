@@ -9,7 +9,6 @@ from typing import Dict, List, Optional, Tuple
 class FoodPairingMatcher:
     """Classe pour matcher les plats recherchés avec les accords mets-vins"""
     
-    # Catégories de viandes et leurs correspondances
     MEAT_CATEGORIES = {
         'viande_rouge': [
             'viande rouge', 'bœuf', 'boeuf', 'entrecôte', 'côte de bœuf', 'côte de boeuf',
@@ -42,7 +41,6 @@ class FoodPairingMatcher:
         ]
     }
     
-    # Mots-clés qui indiquent un type de plat
     DISH_KEYWORDS = {
         'grillé': ['grillé', 'grillade', 'barbecue', 'bbq', 'braisé'],
         'en sauce': ['sauce', 'sauté', 'mijoté', 'braisé', 'daube', 'ragoût'],
@@ -67,8 +65,6 @@ class FoodPairingMatcher:
             'keywords': []
         }
         
-        # Chercher les catégories de viande (recherche améliorée avec normalisation)
-        # Normaliser la requête pour gérer les accents et variations (ex: "côte de bœuf" vs "cote de boeuf")
         query_normalized = unicodedata.normalize('NFKD', query_lower).encode('ascii', 'ignore').decode('ascii')
         
         for category, keywords in self.MEAT_CATEGORIES.items():
@@ -76,21 +72,17 @@ class FoodPairingMatcher:
                 keyword_lower = keyword.lower()
                 keyword_normalized = unicodedata.normalize('NFKD', keyword_lower).encode('ascii', 'ignore').decode('ascii')
                 
-                # Recherche exacte (avec accents) - priorité
                 if keyword_lower in query_lower:
                     extracted['meat_category'] = category
                     extracted['dish'] = keyword
                     break
-                # Recherche normalisée (sans accents) pour "côte de bœuf" vs "cote de boeuf"
                 elif keyword_normalized in query_normalized and len(keyword_normalized) > 2:
-                    # Vérifier que le mot normalisé fait au moins 3 caractères pour éviter les faux positifs
                     extracted['meat_category'] = category
                     extracted['dish'] = keyword
                     break
             if extracted['meat_category']:
                 break
         
-        # Chercher les méthodes de cuisson
         for method, keywords in self.DISH_KEYWORDS.items():
             for keyword in keywords:
                 if keyword in query_lower:
@@ -99,7 +91,6 @@ class FoodPairingMatcher:
             if extracted['cooking_method']:
                 break
         
-        # Extraire d'autres mots-clés de plat
         dish_patterns = [
             r'\b(?:avec|pour|accompagner|manger)\s+([^,\.]+?)(?:,|\.|$)',
             r'\b(?:plat|repas|mets)\s+(?:de|du|des)?\s*([^,\.]+?)(?:,|\.|$)',
@@ -126,20 +117,17 @@ class FoodPairingMatcher:
         wine_accords_lower = wine_accords.lower()
         meat_category = user_dish.get('meat_category')
         
-        # Score de compatibilité
-        compatibility_score = 0.5  # Score neutre par défaut
+        compatibility_score = 0.5
         reason = ""
         
         # Vérifier la compatibilité selon la catégorie de viande
         if meat_category == 'viande_rouge':
-            # Mots-clés compatibles avec viande rouge
             compatible_keywords = [
                 'bœuf', 'boeuf', 'entrecôte', 'steak', 'bavette', 'côte de bœuf',
                 'agneau', 'gigot', 'mouton', 'veau', 'gibier', 'sanglier',
                 'canard', 'magret', 'confit', 'viande rouge', 'viandes rouges'
             ]
             
-            # Mots-clés incompatibles (viande blanche)
             incompatible_keywords = [
                 'poulet', 'poularde', 'chapon', 'dinde', 'volaille', 'volailles',
                 'viande blanche', 'viandes blanches', 'poisson', 'saumon'
@@ -156,7 +144,7 @@ class FoodPairingMatcher:
                 compatibility_score = 0.6
                 reason = "Accord mixte (mentionne aussi viande blanche)"
             elif incompatible_found:
-                compatibility_score = 0.2  # Pénalité forte
+                compatibility_score = 0.2
                 reason = "Accord principalement pour viande blanche"
             else:
                 compatibility_score = 0.5
@@ -228,22 +216,17 @@ class FoodPairingMatcher:
         """
         query_lower = query.lower()
         
-        # Détection par catégorie de viande/plat
         if any(keyword in query_lower for keyword in self.MEAT_CATEGORIES['viande_rouge']):
             return 'Rouge'
         
         if any(keyword in query_lower for keyword in ['barbecue', 'bbq', 'grillade', 'grillé']):
-            # Barbecue = généralement viande rouge
             if any(keyword in query_lower for keyword in ['entrecôte', 'steak', 'bœuf', 'boeuf', 'viande rouge']):
                 return 'Rouge'
-            # Sinon, peut être blanc/rosé pour poulet/poisson au barbecue
             if any(keyword in query_lower for keyword in ['poulet', 'poisson', 'saumon']):
                 return 'Blanc'
-            # Par défaut barbecue = rouge
             return 'Rouge'
         
         if any(keyword in query_lower for keyword in self.MEAT_CATEGORIES['viande_blanche']):
-            # Viande blanche = Blanc ou Rosé
             if 'rosé' in query_lower:
                 return 'Rosé'
             return 'Blanc'
@@ -252,33 +235,26 @@ class FoodPairingMatcher:
             return 'Blanc'
         
         if any(keyword in query_lower for keyword in self.MEAT_CATEGORIES['fromage']):
-            # Fromage = peut être rouge ou blanc selon le contexte
             if 'rouge' in query_lower:
                 return 'Rouge'
             return 'Blanc'
         
-        # Détection par occasion - peut suggérer plusieurs types
         if any(keyword in query_lower for keyword in ['apéritif', 'apéro', 'apéritif dînatoire']):
-            # Pour apéritif, plusieurs types sont possibles
             if any(keyword in query_lower for keyword in ['été', 'piscine', 'chaud', 'frais', 'rosé']):
-                # Contexte estival = rosé, bulles ou blanc
-                return None  # Ne pas filtrer strictement, laisser la recherche sémantique proposer plusieurs types
-            return 'Bulles'  # Par défaut pour apéritif
+                return None
+            return 'Bulles'
         
         if any(keyword in query_lower for keyword in ['été', 'piscine', 'plage', 'terrasse', 'chaud']):
-            # Contexte estival = rosé, bulles ou blanc - ne pas filtrer strictement
             return None
         
         if any(keyword in query_lower for keyword in ['dîner romantique', 'romantique']):
-            # Dîner romantique = généralement rouge, mais peut être blanc selon le plat
             if any(keyword in query_lower for keyword in ['poisson', 'saumon', 'blanc']):
                 return 'Blanc'
-            return 'Rouge'  # Par défaut
+            return 'Rouge'
         
         if any(keyword in query_lower for keyword in ['soirée', 'fête', 'célébration']):
             return 'Bulles'
         
-        # Si aucun indice, ne pas suggérer (None)
         return None
     
     def enhance_query_with_pairing(self, query: str) -> str:
@@ -288,11 +264,7 @@ class FoodPairingMatcher:
         dish_info = self.extract_dish_from_query(query)
         
         if dish_info.get('meat_category'):
-            # Ajouter des termes pertinents selon la catégorie
-            # Répéter les termes importants pour donner plus de poids dans SBERT
             if dish_info['meat_category'] == 'viande_rouge':
-                # Enrichir avec des termes très spécifiques à la viande rouge
-                # Répéter plusieurs fois pour donner plus de poids dans l'embedding
                 query += " accord viande rouge bœuf entrecôte steak agneau gigot mouton veau gibier sanglier canard magret"
                 query += " accord viande rouge bœuf entrecôte steak agneau"
                 query += " bœuf entrecôte steak agneau veau gibier"

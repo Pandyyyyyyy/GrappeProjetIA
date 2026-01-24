@@ -92,8 +92,7 @@ def initialize_system():
         if st.session_state.semantic_search.wines != st.session_state.wines:
             st.session_state.semantic_search.wines = st.session_state.wines
     
-    # Calculer les embeddings si nécessaire
-    # Si modification structure supprimer wine_embeddings.pkl pour recalculer
+    
     if not st.session_state.embeddings_computed:
         with st.spinner("Calcul des embeddings sémantiques (cela peut prendre quelques instants)..."):
             # Vérifier si les embeddings existent et sont à jour
@@ -1155,7 +1154,7 @@ def search_wines(
             st.markdown("Carte interactive montrant la répartition géographique des vins recommandés avec leurs informations (région, cépage, prix)")
             
             if top_wines:
-                # Préparer les données pour la carte (inclure le score)
+                # Préparer les données pour la carte
                 wines_for_map = []
                 for wine_data in top_wines:
                     wine, final_score, semantic_score = wine_data
