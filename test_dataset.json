@@ -1,0 +1,62 @@
+[
+  {
+    "query": "Je cherche un vin pour une côte de bœuf",
+    "context": "viande rouge",
+    "relevant_wines": [
+      "Crozes-Hermitage \"Les Meysonniers\"",
+      "Côtes du Rhône \"Parallèle 45\"",
+      "Saumur-Champigny \"Les Roches\"",
+      "Chinon \"Les Grézeaux\"",
+      "Bordeaux Supérieur \"Mouton Cadet\""
+    ],
+    "description": "Recherche de vins rouges pour viande rouge"
+  },
+  {
+    "query": "Je veux vin apero fromage frais",
+    "context": "apéro + fromage",
+    "relevant_wines": [
+      "Morgon \"Côte du Py\"",
+      "Brouilly \"Château de Pierreux\"",
+      "Muscadet Sèvre et Maine \"Sur Lie\"",
+      "Entre-Deux-Mers",
+      "Côtes de Provence Rosé"
+    ],
+    "description": "Recherche de vins d'apéro avec fromage"
+  },
+  {
+    "query": "Vin pour accompagner un saumon",
+    "context": "poisson",
+    "relevant_wines": [
+      "Chablis \"Saint Martin\"",
+      "Sancerre Blanc \"Les Monts Damnés\"",
+      "Pouilly-Fumé \"Ladoucette\"",
+      "Muscadet Sèvre et Maine \"Sur Lie\"",
+      "Meursault \"Les Clous\""
+    ],
+    "description": "Recherche de vins blancs pour poisson"
+  },
+  {
+    "query": "Je cherche un vin corsé et puissant",
+    "context": "intensité forte",
+    "relevant_wines": [
+      "Châteauneuf-du-Pape \"La Fiole\"",
+      "Crozes-Hermitage \"Les Meysonniers\"",
+      "Gigondas \"Dentelles\"",
+      "Vacqueyras \"Seigneur de Lauris\"",
+      "Saint-Joseph \"Offerus\""
+    ],
+    "description": "Recherche de vins corsés"
+  },
+  {
+    "query": "Vin léger et frais pour l'été",
+    "context": "léger + frais",
+    "relevant_wines": [
+      "Côtes de Provence Rosé",
+      "Sancerre Blanc \"Les Monts Damnés\"",
+      "Muscadet Sèvre et Maine \"Sur Lie\"",
+      "Morgon \"Côte du Py\"",
+      "Brouilly \"Château de Pierreux\""
+    ],
+    "description": "Recherche de vins légers pour l'été"
+  }
+]
