@@ -31,8 +31,7 @@ class SemanticWineSearch:
     
     def compute_embeddings(self, wines: List[Dict], force_recompute: bool = False):
         """
-        Vectorise en SBERT la colonne fusionnée (description_fusionnee)
-        Cette méthode vectorise les descriptions fusionnées des vins avec le modèle SBERT
+        Vectorise en SBERT la colonne fusionnée
         """
         self.wines = wines
         
@@ -51,7 +50,6 @@ class SemanticWineSearch:
             self.load_model()
         
         print("Calcul des embeddings pour tous les vins...")
-        # Vectoriser la colonne fusionnée (description_fusionnee) avec SBERT
         descriptions = [wine['description_fusionnee'] for wine in wines]
         self.wine_embeddings = self.model.encode(
             descriptions,
@@ -96,18 +94,16 @@ class SemanticWineSearch:
         # Vectoriser le texte utilisateur avec SBERT
         query_embedding = self.model.encode([query], convert_to_numpy=True)
         
-        # Créer un mapping des indices des vins filtrés vers les indices dans wine_embeddings
-        # Les vins dans wines_subset doivent correspondre à ceux dans self.wines
         wine_ids = {wine.get('id'): idx for idx, wine in enumerate(self.wines)}
         filtered_indices = []
-        wines_mapping = []  # Mapping pour retrouver le vin original
+        wines_mapping = []
         
         for wine in wines_subset:
             wine_id = wine.get('id')
             if wine_id in wine_ids:
                 idx_in_all = wine_ids[wine_id]
                 filtered_indices.append(idx_in_all)
-                wines_mapping.append(wine)  # Garder le vin original
+                wines_mapping.append(wine)
         
         if not filtered_indices:
             return []
@@ -116,12 +112,10 @@ class SemanticWineSearch:
         filtered_embeddings = self.wine_embeddings[filtered_indices]
         similarities = cosine_similarity(query_embedding, filtered_embeddings)[0]
         
-        # Trier par similarité décroissante
         sorted_indices = np.argsort(similarities)[::-1][:top_k]
         
         results = []
         for idx in sorted_indices:
-            # Utiliser le mapping pour retrouver le vin original
             wine_original = wines_mapping[idx]
             results.append((wine_original, float(similarities[idx])))
         
